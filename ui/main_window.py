@@ -2,9 +2,9 @@
 Main Window GUI Module
 Antarmuka Grafis Desktop Modern menggunakan CustomTkinter.
 Mendukung 3 Mode Utama:
-1. 🎨 Desain & Generator QR (Single dengan opsi C++ Security Encryption)
-2. ⚡ C++ Batch Generator (Pencetakan massal puluhan ribu tiket + Benchmark)
-3. 📷 Scanner Kamera & Validasi (Webcam OpenCV scanner + Verifikasi keaslian)
+1. Generator QR (Single dengan opsi C++ Security Encryption)
+2. C++ Batch Generator (Pencetakan massal puluhan ribu tiket + Benchmark)
+3. Scanner Kamera & Validasi (Webcam OpenCV scanner + Verifikasi keaslian)
 """
 
 import os
@@ -33,12 +33,12 @@ class QRApp(ctk.CTk):
         super().__init__()
 
         # Setup Jendela Utama
-        self.title("⚡ QR Studio Pro - Desktop QR Engine & Security Suite")
+        self.title("QR Studio Pro - Desktop QR Engine & Security Suite")
         self.geometry("1160x800")
         self.minsize(1020, 720)
 
         # State Aplikasi
-        self.current_app_mode = "🎨 Generator QR"
+        self.current_app_mode = "Generator QR"
         self.current_tab = "URL / Teks"
         self.fill_color = "#000000"
         self.back_color = "#FFFFFF"
@@ -78,16 +78,16 @@ class QRApp(ctk.CTk):
 
         title_lbl = ctk.CTkLabel(
             title_box,
-            text="⚡ QR STUDIO PRO",
+            text="QR STUDIO PRO",
             font=ctk.CTkFont(size=20, weight="bold"),
             text_color=("#1e3a8a", "#60a5fa"),
         )
         title_lbl.pack(anchor="w")
 
-        cpp_status = "C++ Engine Aktif 🚀" if bridge.is_cpp_active() else "Python Engine ⚡"
+        cpp_status = "C++ Engine Aktif" if bridge.is_cpp_active() else "Python Engine"
         subtitle_lbl = ctk.CTkLabel(
             title_box,
-            text=f"Desktop Suite • {cpp_status} • Multi-Threaded & Anti-Tamper Security",
+            text=f"Desktop Suite | {cpp_status} | Multi-Threaded & Anti-Tamper Security",
             font=ctk.CTkFont(size=11),
             text_color=("gray40", "gray55"),
         )
@@ -99,11 +99,11 @@ class QRApp(ctk.CTk):
 
         self.mode_nav = ctk.CTkSegmentedButton(
             nav_box,
-            values=["🎨 Generator QR", "⚡ C++ Batch Generator", "📷 Scanner & Validasi"],
+            values=["Generator QR", "C++ Batch Generator", "Scanner & Validasi"],
             command=self._on_mode_change,
             font=ctk.CTkFont(size=13, weight="bold"),
         )
-        self.mode_nav.set("🎨 Generator QR")
+        self.mode_nav.set("Generator QR")
         self.mode_nav.pack()
 
         # Switch Tema (Dark / Light)
@@ -151,19 +151,19 @@ class QRApp(ctk.CTk):
         self.current_app_mode = selected_mode
 
         # Matikan webcam jika keluar dari tab scanner
-        if selected_mode != "📷 Scanner & Validasi":
+        if selected_mode != "Scanner & Validasi":
             self._stop_webcam()
 
         self.view_generator.pack_forget()
         self.view_batch.pack_forget()
         self.view_scanner.pack_forget()
 
-        if selected_mode == "🎨 Generator QR":
+        if selected_mode == "Generator QR":
             self.view_generator.pack(fill="both", expand=True)
             self.generate_qr()
-        elif selected_mode == "⚡ C++ Batch Generator":
+        elif selected_mode == "C++ Batch Generator":
             self.view_batch.pack(fill="both", expand=True)
-        elif selected_mode == "📷 Scanner & Validasi":
+        elif selected_mode == "Scanner & Validasi":
             self.view_scanner.pack(fill="both", expand=True)
 
     # =========================================================================
@@ -178,7 +178,7 @@ class QRApp(ctk.CTk):
         # Panel Kiri: Scrollable Controls
         self.left_scroll = ctk.CTkScrollableFrame(
             parent,
-            label_text="⚙️ KONTEN & PENGATURAN QR",
+            label_text="KONTEN & PENGATURAN QR",
             label_font=ctk.CTkFont(size=14, weight="bold"),
         )
         self.left_scroll.grid(row=0, column=0, sticky="nsew", padx=(0, 10))
@@ -199,18 +199,18 @@ class QRApp(ctk.CTk):
 
         self.category_seg = ctk.CTkSegmentedButton(
             p,
-            values=["🌐 URL / Teks", "📶 Wi-Fi", "👤 Kontak", "💬 WhatsApp", "✉️ Email"],
+            values=["URL / Teks", "Wi-Fi", "Kontak", "WhatsApp", "Email"],
             command=self._on_category_change,
             font=ctk.CTkFont(size=12, weight="bold"),
         )
-        self.category_seg.set("🌐 URL / Teks")
+        self.category_seg.set("URL / Teks")
         self.category_seg.pack(fill="x", pady=(0, 10))
 
         self.form_container = ctk.CTkFrame(p, corner_radius=8, fg_color=("gray95", "#27272a"))
         self.form_container.pack(fill="x", pady=(0, 12), padx=2, ipady=6)
 
         self._init_form_fields()
-        self._show_form_for_category("🌐 URL / Teks")
+        self._show_form_for_category("URL / Teks")
 
         # 2. ENKRIPSI TIKET (SECURITY)
         sec_lbl = ctk.CTkLabel(p, text="2. Keamanan & Enkripsi Tiket (C++ Engine):", font=ctk.CTkFont(size=13, weight="bold"))
@@ -319,7 +319,7 @@ class QRApp(ctk.CTk):
 
         self.upload_logo_btn = ctk.CTkButton(
             logo_btn_row,
-            text="📂 Pilih File Logo...",
+            text="Pilih File Logo...",
             font=ctk.CTkFont(size=12, weight="bold"),
             command=self._choose_logo_file,
         )
@@ -327,7 +327,7 @@ class QRApp(ctk.CTk):
 
         self.remove_logo_btn = ctk.CTkButton(
             logo_btn_row,
-            text="❌ Hapus",
+            text="Hapus",
             width=65,
             fg_color="#ef4444",
             hover_color="#dc2626",
@@ -510,7 +510,7 @@ class QRApp(ctk.CTk):
 
         p_title = ctk.CTkLabel(
             r,
-            text="🖼️ PRATINJAU QR CODE",
+            text="PRATINJAU QR CODE",
             font=ctk.CTkFont(size=14, weight="bold"),
             text_color=("#1e3a8a", "#60a5fa"),
         )
@@ -530,7 +530,7 @@ class QRApp(ctk.CTk):
 
         self.info_status_lbl = ctk.CTkLabel(
             r,
-            text="Ukuran: - • Siap Digunakan",
+            text="Ukuran: - | Siap Digunakan",
             font=ctk.CTkFont(size=11),
             text_color="gray50",
         )
@@ -557,7 +557,7 @@ class QRApp(ctk.CTk):
 
         self.btn_refresh = ctk.CTkButton(
             action_box,
-            text="⚡ Perbarui Tampilan QR",
+            text="Perbarui Tampilan QR",
             height=36,
             font=ctk.CTkFont(size=13, weight="bold"),
             command=self.generate_qr,
@@ -570,7 +570,7 @@ class QRApp(ctk.CTk):
 
         self.btn_save_png = ctk.CTkButton(
             grid_btns,
-            text="💾 Simpan PNG",
+            text="Simpan PNG",
             height=34,
             fg_color="#10b981",
             hover_color="#059669",
@@ -581,7 +581,7 @@ class QRApp(ctk.CTk):
 
         self.btn_save_svg = ctk.CTkButton(
             grid_btns,
-            text="📐 Ekspor SVG (Vektor)",
+            text="Ekspor SVG (Vektor)",
             height=34,
             fg_color="#8b5cf6",
             hover_color="#7c3aed",
@@ -592,7 +592,7 @@ class QRApp(ctk.CTk):
 
         self.btn_copy_clip = ctk.CTkButton(
             action_box,
-            text="📋 Salin Gambar ke Clipboard",
+            text="Salin Gambar ke Clipboard",
             height=34,
             fg_color=("gray75", "#3f3f46"),
             hover_color=("gray65", "#52525b"),
@@ -708,9 +708,9 @@ class QRApp(ctk.CTk):
             self.qr_preview_label.configure(image=ctk_img, text="")
             self.qr_preview_label.image = ctk_img
 
-            enc_tag = " [🔒 Enkripsi C++ Aktif]" if payload.startswith("SECQR1:") else ""
+            enc_tag = " [Enkripsi C++ Aktif]" if payload.startswith("SECQR1:") else ""
             self.info_status_lbl.configure(
-                text=f"Ukuran: {w}x{h} px • Koreksi: {ec_code}{enc_tag} • Siap Diekspor"
+                text=f"Ukuran: {w}x{h} px | Koreksi: {ec_code}{enc_tag} | Siap Diekspor"
             )
         except Exception as err:
             self._show_toast(f"Error: {str(err)}", is_error=True)
@@ -811,7 +811,7 @@ class QRApp(ctk.CTk):
             try:
                 target_dim = self._get_export_dimension()
                 self.qr_engine_instance.save_png(filepath, max_dimension=target_dim)
-                self._show_toast(f"✅ Tersimpan ke: {os.path.basename(filepath)}")
+                self._show_toast(f"[OK] Tersimpan ke: {os.path.basename(filepath)}")
             except Exception as e:
                 messagebox.showerror("Gagal Menyimpan", f"Terjadi kesalahan saat menyimpan PNG:\n{str(e)}")
 
@@ -827,7 +827,7 @@ class QRApp(ctk.CTk):
         if filepath:
             try:
                 self.qr_engine_instance.save_svg(filepath)
-                self._show_toast(f"✅ Vektor SVG tersimpan ke: {os.path.basename(filepath)}")
+                self._show_toast(f"[OK] Vektor SVG tersimpan ke: {os.path.basename(filepath)}")
             except Exception as e:
                 messagebox.showerror("Gagal Menyimpan", f"Terjadi kesalahan saat menyimpan SVG:\n{str(e)}")
 
@@ -838,9 +838,9 @@ class QRApp(ctk.CTk):
         if self.current_pil_image:
             success, msg = copy_image_to_clipboard(self.current_pil_image)
             if success:
-                self._show_toast("✅ Gambar berhasil disalin ke Clipboard!")
+                self._show_toast("[OK] Gambar berhasil disalin ke Clipboard!")
             else:
-                self._show_toast(f"❌ {msg}", is_error=True)
+                self._show_toast(f"[ERROR] {msg}", is_error=True)
 
     # =========================================================================
     # MODE 2: BATCH GENERATOR MASSAL & BENCHMARK C++
@@ -850,7 +850,7 @@ class QRApp(ctk.CTk):
         parent.grid_columnconfigure(0, weight=1)
         parent.grid_rowconfigure(0, weight=1)
 
-        scroll = ctk.CTkScrollableFrame(parent, label_text="⚡ C++ HIGH-PERFORMANCE BATCH GENERATOR", label_font=ctk.CTkFont(size=15, weight="bold"))
+        scroll = ctk.CTkScrollableFrame(parent, label_text="C++ HIGH-PERFORMANCE BATCH GENERATOR", label_font=ctk.CTkFont(size=15, weight="bold"))
         scroll.grid(row=0, column=0, sticky="nsew", padx=10, pady=5)
 
         info_box = ctk.CTkFrame(scroll, fg_color=("gray92", "#27272a"), corner_radius=10)
@@ -858,7 +858,7 @@ class QRApp(ctk.CTk):
 
         ctk.CTkLabel(
             info_box,
-            text="🚀 Pembuatan Massal Puluhan Ribu Tiket / Label Gudang",
+            text="Pembuatan Massal Puluhan Ribu Tiket / Label Gudang",
             font=ctk.CTkFont(size=14, weight="bold"),
             text_color=("#1e3a8a", "#60a5fa"),
         ).pack(anchor="w", padx=15, pady=(5, 2))
@@ -921,7 +921,7 @@ class QRApp(ctk.CTk):
         self.b_ent_dir.insert(0, default_export)
         self.b_ent_dir.pack(side="left", fill="x", expand=True)
 
-        ctk.CTkButton(b_dir_row, text="📁 Browse", width=75, command=self._browse_batch_dir).pack(side="right", padx=(6, 0))
+        ctk.CTkButton(b_dir_row, text="Browse", width=75, command=self._browse_batch_dir).pack(side="right", padx=(6, 0))
 
         # Baris 3: Opsi Enkripsi Keamanan Massal
         r3 = ctk.CTkFrame(form_card, fg_color="transparent")
@@ -949,7 +949,7 @@ class QRApp(ctk.CTk):
 
         self.btn_run_batch = ctk.CTkButton(
             btn_row,
-            text="🚀 Mulai Batch Printing Sekarang",
+            text="Mulai Batch Printing Sekarang",
             height=42,
             font=ctk.CTkFont(size=14, weight="bold"),
             fg_color="#10b981",
@@ -960,7 +960,7 @@ class QRApp(ctk.CTk):
 
         self.btn_bench = ctk.CTkButton(
             btn_row,
-            text="⏱️ Uji Benchmark Speed",
+            text="Uji Benchmark Speed",
             height=42,
             width=200,
             font=ctk.CTkFont(size=13, weight="bold"),
@@ -1003,7 +1003,7 @@ class QRApp(ctk.CTk):
         out_dir = self.b_ent_dir.get().strip()
         key = self.b_ent_key.get().strip() if self.b_chk_encrypt.get() == 1 else None
 
-        self.btn_run_batch.configure(state="disabled", text="⏳ Sedang Memproses Batch...")
+        self.btn_run_batch.configure(state="disabled", text="Sedang Memproses Batch...")
         self.b_progress.set(0)
         self.b_status_lbl.configure(text=f"Memproses {count} QR Code...", text_color="#3b82f6")
 
@@ -1022,28 +1022,28 @@ class QRApp(ctk.CTk):
             )
 
             def on_finish():
-                self.btn_run_batch.configure(state="normal", text="🚀 Mulai Batch Printing Sekarang")
+                self.btn_run_batch.configure(state="normal", text="Mulai Batch Printing Sekarang")
                 self.b_progress.set(1.0)
                 sec = stats["elapsed_seconds"]
                 qps = stats["qps"]
-                msg = f"✅ Selesai! {count} file berhasil dibuat dalam {sec:.2f} detik ({qps:,} QR/detik)\nManifest: {stats['manifest_path']}"
+                msg = f"[OK] Selesai! {count} file berhasil dibuat dalam {sec:.2f} detik ({qps:,} QR/detik)\nManifest: {stats['manifest_path']}"
                 self.b_status_lbl.configure(text=msg, text_color="#10b981")
-                messagebox.showinfo("Batch Selesai!", msg)
+                messagebox.showinfo("Batch Selesai", msg)
 
             self.after(0, on_finish)
 
         threading.Thread(target=thread_target, daemon=True).start()
 
     def _run_benchmark_test(self):
-        self.btn_bench.configure(state="disabled", text="⏳ Menguji...")
+        self.btn_bench.configure(state="disabled", text="Menguji...")
         self.b_status_lbl.configure(text="Menjalankan benchmark generasi matriks QR Code...", text_color="#8b5cf6")
 
         def thread_target():
             ms, qps = bridge.benchmark_speed(count=3000)
 
             def on_finish():
-                self.btn_bench.configure(state="normal", text="⏱️ Uji Benchmark Speed")
-                res_txt = f"⚡ Hasil Benchmark: 3,000 QR matriks diproses dalam {ms:.1f} ms (~{qps:,} QR/detik!)"
+                self.btn_bench.configure(state="normal", text="Uji Benchmark Speed")
+                res_txt = f"Hasil Benchmark: 3,000 QR matriks diproses dalam {ms:.1f} ms (~{qps:,} QR/detik)"
                 self.b_status_lbl.configure(text=res_txt, text_color="#8b5cf6")
                 messagebox.showinfo("Benchmark Selesai", res_txt)
 
@@ -1065,7 +1065,7 @@ class QRApp(ctk.CTk):
 
         ctk.CTkLabel(
             cam_card,
-            text="📷 KAMERA SCANNER REAL-TIME",
+            text="KAMERA SCANNER REAL-TIME",
             font=ctk.CTkFont(size=14, weight="bold"),
             text_color=("#1e3a8a", "#60a5fa"),
         ).pack(anchor="w", padx=15, pady=(15, 8))
@@ -1086,7 +1086,7 @@ class QRApp(ctk.CTk):
 
         ctk.CTkLabel(
             res_card,
-            text="🛡️ VERIFIKASI KEASLIAN TIKET",
+            text="VERIFIKASI KEASLIAN TIKET",
             font=ctk.CTkFont(size=14, weight="bold"),
             text_color=("#1e3a8a", "#60a5fa"),
         ).pack(anchor="w", padx=15, pady=(15, 10))
@@ -1106,7 +1106,7 @@ class QRApp(ctk.CTk):
 
         self.btn_toggle_cam = ctk.CTkButton(
             btn_box,
-            text="🎥 Mulai Scanner Webcam",
+            text="Mulai Scanner Webcam",
             height=38,
             font=ctk.CTkFont(size=13, weight="bold"),
             fg_color="#3b82f6",
@@ -1117,7 +1117,7 @@ class QRApp(ctk.CTk):
 
         self.btn_scan_file = ctk.CTkButton(
             btn_box,
-            text="📁 Scan dari File Gambar...",
+            text="Scan dari File Gambar...",
             height=36,
             font=ctk.CTkFont(size=12, weight="bold"),
             fg_color=("gray75", "#3f3f46"),
@@ -1158,7 +1158,7 @@ class QRApp(ctk.CTk):
                 return
 
             self.is_webcam_running = True
-            self.btn_toggle_cam.configure(text="🛑 Hentikan Scanner Webcam", fg_color="#ef4444", hover_color="#dc2626")
+            self.btn_toggle_cam.configure(text="Hentikan Scanner Webcam", fg_color="#ef4444", hover_color="#dc2626")
             self._update_webcam_loop()
         except Exception as e:
             messagebox.showerror("Error Kamera", str(e))
@@ -1173,7 +1173,7 @@ class QRApp(ctk.CTk):
             self.cap = None
 
         if hasattr(self, "btn_toggle_cam"):
-            self.btn_toggle_cam.configure(text="🎥 Mulai Scanner Webcam", fg_color="#3b82f6", hover_color="#2563eb")
+            self.btn_toggle_cam.configure(text="Mulai Scanner Webcam", fg_color="#3b82f6", hover_color="#2563eb")
         if hasattr(self, "cam_screen"):
             self.cam_screen.configure(image="", text="Kamera nonaktif.\nKlik 'Mulai Scanner Webcam' untuk menyalakan.")
 
@@ -1217,7 +1217,7 @@ class QRApp(ctk.CTk):
             if res:
                 self._update_scan_ui_result(res)
             else:
-                self.scan_badge.configure(text="❌ TIDAK DITEMUKAN QR CODE", fg_color="#ef4444", text_color="#ffffff")
+                self.scan_badge.configure(text="TIDAK DITEMUKAN QR CODE", fg_color="#ef4444", text_color="#ffffff")
                 self.txt_scan_content.delete("1.0", "end")
                 self.txt_scan_content.insert("1.0", "Tidak ada kode QR yang terdeteksi pada berkas gambar ini.")
 
@@ -1229,16 +1229,16 @@ class QRApp(ctk.CTk):
 
         if res.verification_status == 0:
             # Tiket Asli
-            self.scan_badge.configure(text="✅ TIKET ASLI TERVERIFIKASI", fg_color="#10b981", text_color="#ffffff")
+            self.scan_badge.configure(text="[VALID] TIKET ASLI TERVERIFIKASI", fg_color="#10b981", text_color="#ffffff")
         elif res.verification_status == 1:
             # Tiket Palsu / Kunci Salah
-            self.scan_badge.configure(text="❌ PERINGATAN: TIKET PALSU!", fg_color="#ef4444", text_color="#ffffff")
+            self.scan_badge.configure(text="[PERINGATAN] TIKET PALSU!", fg_color="#ef4444", text_color="#ffffff")
         elif res.verification_status == 3:
             # Perlu Kunci
-            self.scan_badge.configure(text="🔒 TIKET TERENKRIPSI (KUNCI DIBUTUHKAN)", fg_color="#f59e0b", text_color="#000000")
+            self.scan_badge.configure(text="[KUNCI DIBUTUHKAN] TIKET TERENKRIPSI", fg_color="#f59e0b", text_color="#000000")
         else:
             # QR Normal / Plain text
-            self.scan_badge.configure(text="📄 QR CODE BIASA TERDETEKSI", fg_color="#3b82f6", text_color="#ffffff")
+            self.scan_badge.configure(text="QR CODE BIASA TERDETEKSI", fg_color="#3b82f6", text_color="#ffffff")
 
         self.txt_scan_content.delete("1.0", "end")
         details = (

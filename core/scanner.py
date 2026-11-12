@@ -58,7 +58,7 @@ class ScannerEngine:
                     is_encrypted=True,
                     verification_status=3,
                     decoded_content="[TERENKRIPSI]",
-                    message="🔒 Tiket terenkripsi SECQR1 terdeteksi. Masukkan Kunci Rahasia untuk memvalidasi.",
+                    message="Tiket terenkripsi SECQR1 terdeteksi. Masukkan Kunci Rahasia untuk memvalidasi.",
                 )
 
             status, plain_or_err = bridge.decrypt_ticket(val, key)
@@ -68,7 +68,7 @@ class ScannerEngine:
                     is_encrypted=True,
                     verification_status=0,
                     decoded_content=plain_or_err,
-                    message=f"✅ TIKET ASLI TERVERIFIKASI: {plain_or_err}",
+                    message=f"[VALID] TIKET ASLI TERVERIFIKASI: {plain_or_err}",
                 )
             else:
                 return ScanResult(
@@ -76,7 +76,7 @@ class ScannerEngine:
                     is_encrypted=True,
                     verification_status=1,
                     decoded_content="PALSU / TIDAK VALID",
-                    message="❌ PERINGATAN: TIKET PALSU ATAU KUNCI SALAH!",
+                    message="[PERINGATAN] TIKET PALSU ATAU KUNCI SALAH!",
                 )
         else:
             return ScanResult(
@@ -84,7 +84,7 @@ class ScannerEngine:
                 is_encrypted=False,
                 verification_status=-1,
                 decoded_content=val,
-                message=f"📄 QR Terdeteksi: {val}",
+                message=f"QR Terdeteksi: {val}",
             )
 
     def annotate_frame(
