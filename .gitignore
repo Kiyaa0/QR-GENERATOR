@@ -15,3 +15,8 @@ dist/
 *.png
 *.svg
 *.jpg
+*.bmp
+*.dll
+*.exe
+output_batch/
+
