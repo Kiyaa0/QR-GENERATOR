@@ -1,5 +1,5 @@
 @echo off
-title Menjalankan QR Studio Pro...
+title Menjalankan Desktop QR Code Generator...
 cd /d "%~dp0"
 if exist "venv\Scripts\python.exe" (
     start "" "venv\Scripts\pythonw.exe" main.py
