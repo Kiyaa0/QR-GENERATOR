@@ -1,0 +1,22 @@
+# Python virtual environment
+venv/
+.venv/
+env/
+
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Temporary & build files
+build/
+dist/
+*.spec
+*.png
+*.svg
+*.jpg
+*.bmp
+*.dll
+*.exe
+output_batch/
+
