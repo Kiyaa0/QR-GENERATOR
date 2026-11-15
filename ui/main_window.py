@@ -512,14 +512,14 @@ class QRApp(ctk.CTk):
         self.f_qris_new.pack(fill="x")
 
         ctk.CTkLabel(self.f_qris_new, text="Nama Merchant / Toko:", font=ctk.CTkFont(weight="bold")).pack(anchor="w", padx=10, pady=(2, 2))
-        self.ent_qris_name = ctk.CTkEntry(self.f_qris_new, placeholder_text="Contoh: WARUNG KOPI NUSANTARA")
-        self.ent_qris_name.insert(0, "WARUNG NUSANTARA")
+        self.ent_qris_name = ctk.CTkEntry(self.f_qris_new, placeholder_text="Contoh: RIZKI PRASETIA")
+        self.ent_qris_name.insert(0, "RIZKI PRASETIA")
         self.ent_qris_name.pack(fill="x", padx=10, pady=(0, 4))
         self.ent_qris_name.bind("<KeyRelease>", lambda e: self.generate_qr())
 
         ctk.CTkLabel(self.f_qris_new, text="NMID (National Merchant ID):", font=ctk.CTkFont(weight="bold")).pack(anchor="w", padx=10, pady=(2, 2))
-        self.ent_qris_nmid = ctk.CTkEntry(self.f_qris_new, placeholder_text="Contoh: ID1020021111111")
-        self.ent_qris_nmid.insert(0, "ID1020021111111")
+        self.ent_qris_nmid = ctk.CTkEntry(self.f_qris_new, placeholder_text="Contoh: ID1023306963290")
+        self.ent_qris_nmid.insert(0, "ID1023306963290")
         self.ent_qris_nmid.pack(fill="x", padx=10, pady=(0, 4))
         self.ent_qris_nmid.bind("<KeyRelease>", lambda e: self.generate_qr())
 
@@ -531,7 +531,7 @@ class QRApp(ctk.CTk):
         c_box.grid(row=0, column=0, sticky="ew", padx=(0, 4))
         ctk.CTkLabel(c_box, text="Kota Toko:").pack(anchor="w")
         self.ent_qris_city = ctk.CTkEntry(c_box)
-        self.ent_qris_city.insert(0, "JAKARTA")
+        self.ent_qris_city.insert(0, "PURWAKARTA")
         self.ent_qris_city.pack(fill="x")
         self.ent_qris_city.bind("<KeyRelease>", lambda e: self.generate_qr())
 
@@ -539,7 +539,7 @@ class QRApp(ctk.CTk):
         p_box.grid(row=0, column=1, sticky="ew", padx=(4, 0))
         ctk.CTkLabel(p_box, text="Kode Pos:").pack(anchor="w")
         self.ent_qris_post = ctk.CTkEntry(p_box)
-        self.ent_qris_post.insert(0, "12345")
+        self.ent_qris_post.insert(0, "41115")
         self.ent_qris_post.pack(fill="x")
 
         ctk.CTkLabel(self.f_qris_new, text="Nominal Pembayaran (Rp) - Opsional:", font=ctk.CTkFont(weight="bold")).pack(anchor="w", padx=10, pady=(4, 2))
@@ -562,8 +562,8 @@ class QRApp(ctk.CTk):
 
         ctk.CTkLabel(self.f_qris_dyn, text="Payload QRIS Asli (Format EMVCo):", font=ctk.CTkFont(weight="bold")).pack(anchor="w", padx=10, pady=(2, 2))
         self.txt_qris_raw = ctk.CTkTextbox(self.f_qris_dyn, height=65)
-        # Sample QRIS statis
-        sample_init_qris = "00020101021126440014ID.CO.QRIS.WWW0115ID10200211111110203UMI5204000053033605802ID5916WARUNG NUSANTARA6007JAKARTA610512345630483AC"
+        # Sample QRIS statis resmi pengguna
+        sample_init_qris = "00020101021126440014ID.CO.QRIS.WWW0115ID10233069632900203UMI5204000053033605802ID5914RIZKI PRASETIA6010PURWAKARTA610541115630401D3"
         self.txt_qris_raw.insert("1.0", sample_init_qris)
         self.txt_qris_raw.pack(fill="x", padx=10, pady=(0, 4))
         self.txt_qris_raw.bind("<KeyRelease>", lambda e: self.generate_qr())
