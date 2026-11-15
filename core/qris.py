@@ -6,6 +6,7 @@ serta pembuatan poster standee display pembayaran lengkap.
 """
 
 import os
+import re
 from typing import Optional, Dict, Any, Tuple
 from PIL import Image, ImageDraw, ImageFont
 
@@ -164,16 +165,26 @@ class QRISCore:
         return payload_to_crc + crc
 
     @classmethod
-    def convert_static_to_dynamic(cls, raw_qris: str, amount: int) -> str:
+    def convert_static_to_dynamic(cls, raw_qris: str, amount: int or str) -> str:
         """
         Mengonversi QRIS Statis apa pun (BCA, GoPay, OVO, Dana, ShopeePay, Mandiri, dll.)
-        menjadi QRIS Dinamis ber-nominal dengan menghitung ulang CRC16.
+        menjadi QRIS Dinamis ber-nominal dengan menyuntikkan Tag 54 dan menghitung ulang CRC16.
+        Mendukung pembersihan otomatis newline/tab dan format nominal (Rp, titik, koma).
         """
-        raw = raw_qris.strip()
+        raw = raw_qris.strip().replace("\r", "").replace("\n", "").replace("\t", "")
         if not raw:
             return ""
 
-        # Potong bagian CRC lama (6304XXXX)
+        # Ekstrak angka murni dari nominal
+        clean_amt_str = re.sub(r"[^\d]", "", str(amount))
+        if not clean_amt_str or int(clean_amt_str) <= 0:
+            return raw
+
+        amt_int = int(clean_amt_str)
+        amt_str = str(amt_int)
+        tag54 = cls.build_tlv(54, amt_str)
+
+        # Potong bagian CRC lama (6304XXXX) di bagian akhir
         if "6304" in raw:
             base = raw[:raw.rfind("6304")]
         else:
@@ -185,22 +196,26 @@ class QRISCore:
         elif "010211" in base:
             base = base.replace("010211", "010212", 1)
 
-        amt_str = str(int(amount))
-        tag54 = cls.build_tlv(54, amt_str)
-
-        # Sisipkan atau gantikan Tag 54
+        # Sisipkan atau gantikan Tag 54 (Nominal) secara kokoh
         if "5303360" in base:
             p1, p2 = base.split("5303360", 1)
-            # Hapus tag 54 lama jika ada
-            if p2.startswith("54"):
-                try:
-                    old_len = int(p2[2:4])
-                    p2 = p2[4 + old_len:]
-                except ValueError:
-                    pass
+            # Hapus tag 54 lama jika sebelumnya sudah ada
+            match54 = re.search(r"54(\d{2})", p2)
+            if match54:
+                len_tag54 = int(match54.group(1))
+                s_idx = match54.start()
+                e_idx = s_idx + 4 + len_tag54
+                p2 = p2[:s_idx] + p2[e_idx:]
             base = p1 + "5303360" + tag54 + p2
         elif "5802ID" in base:
             p1, p2 = base.split("5802ID", 1)
+            # Hapus tag 54 lama dari p1 jika ada
+            match54 = re.search(r"54(\d{2})", p1)
+            if match54:
+                len_tag54 = int(match54.group(1))
+                s_idx = match54.start()
+                e_idx = s_idx + 4 + len_tag54
+                p1 = p1[:s_idx] + p1[e_idx:]
             base = p1 + tag54 + "5802ID" + p2
         else:
             base = base + tag54
@@ -208,6 +223,50 @@ class QRISCore:
         payload_to_crc = base + "6304"
         crc = cls.calculate_crc16(payload_to_crc)
         return payload_to_crc + crc
+
+    @classmethod
+    def validate_qris(cls, qris_str: str) -> Dict[str, Any]:
+        """
+        Mendiagnosis string QRIS secara mendalam:
+        Memeriksa struktur header, keabsahan checksum CRC16,
+        serta membedakan antara QRIS Resmi Acquirer vs QRIS Simulasi/Dummy.
+        """
+        clean = (qris_str or "").strip().replace("\r", "").replace("\n", "").replace("\t", "")
+        if not clean:
+            return {
+                "valid": False,
+                "is_dummy": False,
+                "reason": "String QRIS kosong.",
+            }
+
+        if not clean.startswith("000201"):
+            return {
+                "valid": False,
+                "is_dummy": False,
+                "reason": "Header payload bukan format standar QRIS EMVCo (wajib diawali 000201).",
+            }
+
+        crc_valid = cls.verify_crc(clean)
+        if not crc_valid:
+            return {
+                "valid": False,
+                "is_dummy": False,
+                "reason": "Checksum CRC16 tidak valid atau string terpotong.",
+            }
+
+        # Cek apakah QRIS menggunakan data dummy / simulasi
+        is_dummy = (
+            ("ID1020021111111" in clean)
+            or ("ID1020000000000" in clean)
+            or ("WARUNG NUSANTARA" in clean)
+            or ("52040000" in clean and "ID.CO.QRIS.WWW" in clean)
+        )
+
+        return {
+            "valid": True,
+            "is_dummy": is_dummy,
+            "reason": "QRIS valid." if not is_dummy else "QRIS simulasi/dummy (tidak terdaftar di switching bank).",
+        }
 
 
 class QRISPosterGenerator:

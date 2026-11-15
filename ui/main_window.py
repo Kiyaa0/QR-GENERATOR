@@ -8,6 +8,7 @@ Mendukung 3 Mode Utama:
 """
 
 import os
+import re
 import tempfile
 import threading
 import tkinter as tk
@@ -710,12 +711,20 @@ class QRApp(ctk.CTk):
         if filepath:
             res = self.scanner_engine.scan_image_file(filepath)
             if res and res.raw_text:
+                clean_payload = res.raw_text.strip().replace(" ", "").replace("\r", "").replace("\n", "")
                 self.txt_qris_raw.delete("1.0", "end")
-                self.txt_qris_raw.insert("1.0", res.raw_text)
-                self._show_toast("[OK] Payload QRIS berhasil dibaca dari gambar!")
+                self.txt_qris_raw.insert("1.0", clean_payload)
+                diag = QRISCore.validate_qris(clean_payload)
+                if diag.get("is_dummy"):
+                    self._show_toast("[Peringatan] QRIS yang terbaca adalah format dummy/simulasi.")
+                else:
+                    self._show_toast("[OK] QRIS resmi berhasil terbaca dari gambar!")
                 self.generate_qr()
             else:
-                messagebox.showerror("Gagal", "Tidak dapat mendeteksi kode QRIS dari gambar yang dipilih.")
+                messagebox.showerror(
+                    "Gagal Membaca QRIS",
+                    "Tidak dapat mendeteksi kode QRIS dari gambar yang dipilih.\n\nTips:\n1. Pastikan foto QRIS fokus dan pencahayaan terang.\n2. Pastikan 3 kotak sudut posisi QR Code tidak terpotong atau blur.",
+                )
 
     def _show_form_for_category(self, cat: str):
         for frame in (self.f_url, self.f_qris, self.f_wifi, self.f_vcard, self.f_wa, self.f_mail):
@@ -909,8 +918,8 @@ class QRApp(ctk.CTk):
                 nmid = self.ent_qris_nmid.get().strip() or "ID1020021111111"
                 city = self.ent_qris_city.get().strip() or "JAKARTA"
                 post = self.ent_qris_post.get().strip() or "12345"
-                amt_str = self.ent_qris_amount.get().strip()
-                amt = int(amt_str) if amt_str.isdigit() and int(amt_str) > 0 else None
+                amt_digits = re.sub(r"[^\d]", "", self.ent_qris_amount.get().strip())
+                amt = int(amt_digits) if amt_digits and int(amt_digits) > 0 else None
                 raw = QRISCore.create_qris(
                     merchant_name=m_name,
                     nmid=nmid,
@@ -919,10 +928,10 @@ class QRApp(ctk.CTk):
                     postal_code=post,
                 )
             else:
-                base_qris = self.txt_qris_raw.get("1.0", "end-1c").strip()
-                amt_str = self.ent_qris_dyn_amount.get().strip()
-                amt = int(amt_str) if amt_str.isdigit() and int(amt_str) > 0 else None
-                if amt:
+                base_qris = self.txt_qris_raw.get("1.0", "end-1c").strip().replace(" ", "").replace("\r", "").replace("\n", "")
+                dyn_amt_digits = re.sub(r"[^\d]", "", self.ent_qris_dyn_amount.get().strip())
+                amt = int(dyn_amt_digits) if dyn_amt_digits and int(dyn_amt_digits) > 0 else None
+                if amt and base_qris:
                     raw = QRISCore.convert_static_to_dynamic(base_qris, amt)
                 else:
                     raw = base_qris
@@ -1076,10 +1085,12 @@ class QRApp(ctk.CTk):
 
                 if is_qris:
                     info = QRISCore.extract_info(payload)
+                    diag = QRISCore.validate_qris(payload)
                     amt_lbl = f"Rp {info['amount']:,}".replace(",", ".") if info['amount'] else "Nominal Bebas"
                     art_tag = " [Artistic QR]" if is_artistic else ""
+                    type_tag = " [Simulasi/Dummy]" if diag.get("is_dummy") else " [QRIS Resmi Aktif]"
                     self.info_status_lbl.configure(
-                        text=f"QRIS {info['merchant_name']} | {amt_lbl}{art_tag} | Siap Digunakan"
+                        text=f"QRIS {info['merchant_name']} | {amt_lbl}{art_tag}{type_tag} | Siap Digunakan"
                     )
                 else:
                     enc_tag = " [Enkripsi C++ Aktif]" if payload.startswith("SECQR1:") else ""

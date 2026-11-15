@@ -34,12 +34,44 @@ class ScannerEngine:
         self.detector = cv2.QRCodeDetector()
 
     def scan_image_file(self, filepath: str, secret_key: Optional[str] = None) -> Optional[ScanResult]:
-        """Mendeteksi dan mendekode QR Code dari sebuah file gambar."""
+        """
+        Mendeteksi dan mendekode QR Code dari sebuah file gambar.
+        Mendukung multi-scale downsampling dan padding agar dapat membaca foto kamera
+        smartphone beresolusi tinggi (3000x4000) maupun tangkapan layar langsung.
+        """
         try:
-            # Baca gambar via cv2 (tangani path dengan aman)
             pil_img = Image.open(filepath).convert("RGB")
             cv_img = cv2.cvtColor(np.array(pil_img), cv2.COLOR_RGB2BGR)
-            return self.process_image_array(cv_img, secret_key)
+
+            # 1. Coba deteksi langsung
+            res = self.process_image_array(cv_img, secret_key)
+            if res and res.raw_text:
+                return res
+
+            # 2. Tambahkan border margin jika citra terlalu rapat ke tepi
+            bordered = cv2.copyMakeBorder(cv_img, 40, 40, 40, 40, cv2.BORDER_CONSTANT, value=[255, 255, 255])
+            res = self.process_image_array(bordered, secret_key)
+            if res and res.raw_text:
+                return res
+
+            # 3. Multi-scale scaling untuk menangani resolusi besar foto kamera HP
+            h, w = bordered.shape[:2]
+            for max_dim in (1800, 1600, 1400, 1200, 900, 700, 500, 350):
+                scale = max_dim / max(h, w)
+                if scale < 1.0 or (scale > 1.0 and max(h, w) < 300):
+                    resized = cv2.resize(bordered, (int(w * scale), int(h * scale)), interpolation=cv2.INTER_AREA if scale < 1.0 else cv2.INTER_LINEAR)
+                    res = self.process_image_array(resized, secret_key)
+                    if res and res.raw_text:
+                        return res
+
+            # 4. Uji faktor skala langsung
+            for factor in (0.75, 0.5, 0.35):
+                resized = cv2.resize(bordered, (int(w * factor), int(h * factor)), interpolation=cv2.INTER_AREA)
+                res = self.process_image_array(resized, secret_key)
+                if res and res.raw_text:
+                    return res
+
+            return None
         except Exception as e:
             return ScanResult(message=f"Gagal membaca gambar: {str(e)}")
 
