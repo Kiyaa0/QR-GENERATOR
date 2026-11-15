@@ -2,12 +2,13 @@
 Main Window GUI Module
 Antarmuka Grafis Desktop Modern menggunakan CustomTkinter.
 Mendukung 3 Mode Utama:
-1. Generator QR (Single dengan opsi C++ Security Encryption)
+1. Generator QR (Single dengan opsi C++ Security Encryption & QRIS Pembayaran)
 2. C++ Batch Generator (Pencetakan massal puluhan ribu tiket + Benchmark)
 3. Scanner Kamera & Validasi (Webcam OpenCV scanner + Verifikasi keaslian)
 """
 
 import os
+import tempfile
 import threading
 import tkinter as tk
 from tkinter import filedialog, colorchooser, messagebox
@@ -22,6 +23,7 @@ from core.clipboard import copy_image_to_clipboard
 from core.cpp_bridge import bridge
 from core.batch_engine import BatchEngine
 from core.scanner import ScannerEngine, ScanResult
+from core.qris import QRISCore, QRISPosterGenerator
 
 # Konfigurasi Tema CustomTkinter
 ctk.set_appearance_mode("Dark")
@@ -34,8 +36,8 @@ class QRApp(ctk.CTk):
 
         # Setup Jendela Utama
         self.title("QR Studio Pro - Desktop QR Engine & Security Suite")
-        self.geometry("1160x800")
-        self.minsize(1020, 720)
+        self.geometry("1180x820")
+        self.minsize(1040, 740)
 
         # State Aplikasi
         self.current_app_mode = "Generator QR"
@@ -45,7 +47,12 @@ class QRApp(ctk.CTk):
         self.is_transparent_bg = False
         self.selected_logo_path: Optional[str] = None
         self.current_pil_image: Optional[Image.Image] = None
+        self.current_poster_image: Optional[Image.Image] = None
         self.qr_engine_instance: Optional[QREngine] = None
+
+        # State Khusus QRIS
+        self.qris_custom_logo_path: Optional[str] = None
+        self.temp_qris_badge_path: Optional[str] = None
 
         # State Webcam Scanner
         self.is_webcam_running = False
@@ -65,6 +72,11 @@ class QRApp(ctk.CTk):
 
     def _on_close(self):
         self._stop_webcam()
+        if self.temp_qris_badge_path and os.path.exists(self.temp_qris_badge_path):
+            try:
+                os.remove(self.temp_qris_badge_path)
+            except Exception:
+                pass
         self.destroy()
 
     def _build_header(self):
@@ -87,7 +99,7 @@ class QRApp(ctk.CTk):
         cpp_status = "C++ Engine Aktif" if bridge.is_cpp_active() else "Python Engine"
         subtitle_lbl = ctk.CTkLabel(
             title_box,
-            text=f"Desktop Suite | {cpp_status} | Multi-Threaded & Anti-Tamper Security",
+            text=f"Desktop Suite | {cpp_status} | QRIS Pembayaran & Multi-Threaded Batch",
             font=ctk.CTkFont(size=11),
             text_color=("gray40", "gray55"),
         )
@@ -167,7 +179,7 @@ class QRApp(ctk.CTk):
             self.view_scanner.pack(fill="both", expand=True)
 
     # =========================================================================
-    # MODE 1: GENERATOR TUNGGAL DENGAN OPSI ENKRIPSI C++
+    # MODE 1: GENERATOR TUNGGAL DENGAN QRIS & ENKRIPSI C++
     # =========================================================================
 
     def _build_generator_view(self, parent):
@@ -199,7 +211,7 @@ class QRApp(ctk.CTk):
 
         self.category_seg = ctk.CTkSegmentedButton(
             p,
-            values=["URL / Teks", "Wi-Fi", "Kontak", "WhatsApp", "Email"],
+            values=["URL / Teks", "QRIS Bayar", "Wi-Fi", "Kontak", "WhatsApp", "Email"],
             command=self._on_category_change,
             font=ctk.CTkFont(size=12, weight="bold"),
         )
@@ -210,24 +222,23 @@ class QRApp(ctk.CTk):
         self.form_container.pack(fill="x", pady=(0, 12), padx=2, ipady=6)
 
         self._init_form_fields()
-        self._show_form_for_category("URL / Teks")
 
         # 2. ENKRIPSI TIKET (SECURITY)
-        sec_lbl = ctk.CTkLabel(p, text="2. Keamanan & Enkripsi Tiket (C++ Engine):", font=ctk.CTkFont(size=13, weight="bold"))
-        sec_lbl.pack(anchor="w", pady=(8, 4))
+        self.sec_lbl = ctk.CTkLabel(p, text="2. Keamanan & Enkripsi Tiket (C++ Engine):", font=ctk.CTkFont(size=13, weight="bold"))
+        self.sec_lbl.pack(anchor="w", pady=(8, 4))
 
-        sec_frame = ctk.CTkFrame(p, corner_radius=8, fg_color=("gray95", "#27272a"))
-        sec_frame.pack(fill="x", pady=(0, 12), padx=2, ipady=6)
+        self.sec_frame = ctk.CTkFrame(p, corner_radius=8, fg_color=("gray95", "#27272a"))
+        self.sec_frame.pack(fill="x", pady=(0, 12), padx=2, ipady=6)
 
         self.chk_encrypt = ctk.CTkCheckBox(
-            sec_frame,
+            self.sec_frame,
             text="Kunci Payload dengan C++ Authenticated Encryption (Anti-Palsu)",
             font=ctk.CTkFont(size=12, weight="bold"),
             command=self._on_encrypt_toggle,
         )
         self.chk_encrypt.pack(anchor="w", padx=12, pady=(6, 4))
 
-        self.sec_key_row = ctk.CTkFrame(sec_frame, fg_color="transparent")
+        self.sec_key_row = ctk.CTkFrame(self.sec_frame, fg_color="transparent")
         ctk.CTkLabel(self.sec_key_row, text="Kunci Rahasia (Secret Key):", font=ctk.CTkFont(size=11)).pack(side="left")
         self.ent_secret_key = ctk.CTkEntry(self.sec_key_row, width=220, placeholder_text="Kunci rahasia validasi...")
         self.ent_secret_key.insert(0, "KunciKonser2026!")
@@ -308,13 +319,13 @@ class QRApp(ctk.CTk):
         self.transparent_check.pack(anchor="w", padx=12, pady=(4, 4))
 
         # 4. LOGO TENGAH
-        logo_lbl = ctk.CTkLabel(p, text="4. Sisipkan Logo di Tengah:", font=ctk.CTkFont(size=13, weight="bold"))
-        logo_lbl.pack(anchor="w", pady=(8, 4))
+        self.logo_section_lbl = ctk.CTkLabel(p, text="4. Sisipkan Logo di Tengah:", font=ctk.CTkFont(size=13, weight="bold"))
+        self.logo_section_lbl.pack(anchor="w", pady=(8, 4))
 
-        logo_frame = ctk.CTkFrame(p, corner_radius=8, fg_color=("gray95", "#27272a"))
-        logo_frame.pack(fill="x", pady=(0, 12), padx=2, ipady=6)
+        self.logo_frame = ctk.CTkFrame(p, corner_radius=8, fg_color=("gray95", "#27272a"))
+        self.logo_frame.pack(fill="x", pady=(0, 12), padx=2, ipady=6)
 
-        logo_btn_row = ctk.CTkFrame(logo_frame, fg_color="transparent")
+        logo_btn_row = ctk.CTkFrame(self.logo_frame, fg_color="transparent")
         logo_btn_row.pack(fill="x", padx=12, pady=4)
 
         self.upload_logo_btn = ctk.CTkButton(
@@ -336,14 +347,14 @@ class QRApp(ctk.CTk):
         self.remove_logo_btn.pack(side="right")
 
         self.logo_filename_lbl = ctk.CTkLabel(
-            logo_frame,
+            self.logo_frame,
             text="Belum ada logo yang dipilih",
             font=ctk.CTkFont(size=11, slant="italic"),
             text_color="gray50",
         )
         self.logo_filename_lbl.pack(anchor="w", padx=12, pady=(0, 4))
 
-        badge_row = ctk.CTkFrame(logo_frame, fg_color="transparent")
+        badge_row = ctk.CTkFrame(self.logo_frame, fg_color="transparent")
         badge_row.pack(fill="x", padx=12, pady=4)
         ctk.CTkLabel(badge_row, text="Bentuk Pelindung Logo:", font=ctk.CTkFont(size=12)).pack(side="left")
         self.logo_shape_menu = ctk.CTkOptionMenu(
@@ -355,7 +366,7 @@ class QRApp(ctk.CTk):
         self.logo_shape_menu.set("Kotak Membulat (Rounded)")
         self.logo_shape_menu.pack(side="right")
 
-        slider_row = ctk.CTkFrame(logo_frame, fg_color="transparent")
+        slider_row = ctk.CTkFrame(self.logo_frame, fg_color="transparent")
         slider_row.pack(fill="x", padx=12, pady=4)
         ctk.CTkLabel(slider_row, text="Ukuran Logo:", font=ctk.CTkFont(size=12)).pack(side="left")
         self.logo_size_slider = ctk.CTkSlider(
@@ -393,6 +404,8 @@ class QRApp(ctk.CTk):
         self.ec_menu.set("H - High (30% - Aman untuk Logo)")
         self.ec_menu.pack(side="right")
 
+        self._show_form_for_category("URL / Teks")
+
     def _on_encrypt_toggle(self):
         if self.chk_encrypt.get() == 1:
             self.sec_key_row.pack(fill="x", padx=12, pady=(4, 6))
@@ -408,7 +421,112 @@ class QRApp(ctk.CTk):
         self.txt_url.insert("1.0", "TKT-COLDPLAY-VIP-0099")
         self.txt_url.pack(fill="x", padx=10, pady=(0, 4))
 
-        # 2. Wi-Fi
+        # 2. QRIS Pembayaran (FITUR BARU)
+        self.f_qris = ctk.CTkFrame(self.form_container, fg_color="transparent")
+
+        # Sub-mode QRIS (Buat Baru vs Ubah Statis)
+        self.qris_mode_seg = ctk.CTkSegmentedButton(
+            self.f_qris,
+            values=["Buat QRIS Baru", "Ubah QRIS Statis Jadi Dinamis"],
+            command=self._on_qris_submode_change,
+            font=ctk.CTkFont(size=11, weight="bold"),
+        )
+        self.qris_mode_seg.set("Buat QRIS Baru")
+        self.qris_mode_seg.pack(fill="x", padx=10, pady=(4, 8))
+
+        # Card Buat QRIS Baru
+        self.f_qris_new = ctk.CTkFrame(self.f_qris, fg_color="transparent")
+        self.f_qris_new.pack(fill="x")
+
+        ctk.CTkLabel(self.f_qris_new, text="Nama Merchant / Toko:", font=ctk.CTkFont(weight="bold")).pack(anchor="w", padx=10, pady=(2, 2))
+        self.ent_qris_name = ctk.CTkEntry(self.f_qris_new, placeholder_text="Contoh: WARUNG KOPI NUSANTARA")
+        self.ent_qris_name.insert(0, "WARUNG NUSANTARA")
+        self.ent_qris_name.pack(fill="x", padx=10, pady=(0, 4))
+        self.ent_qris_name.bind("<KeyRelease>", lambda e: self.generate_qr())
+
+        ctk.CTkLabel(self.f_qris_new, text="NMID (National Merchant ID):", font=ctk.CTkFont(weight="bold")).pack(anchor="w", padx=10, pady=(2, 2))
+        self.ent_qris_nmid = ctk.CTkEntry(self.f_qris_new, placeholder_text="Contoh: ID1020021111111")
+        self.ent_qris_nmid.insert(0, "ID1020021111111")
+        self.ent_qris_nmid.pack(fill="x", padx=10, pady=(0, 4))
+        self.ent_qris_nmid.bind("<KeyRelease>", lambda e: self.generate_qr())
+
+        qris_loc_row = ctk.CTkFrame(self.f_qris_new, fg_color="transparent")
+        qris_loc_row.pack(fill="x", padx=10, pady=2)
+        qris_loc_row.grid_columnconfigure((0, 1), weight=1)
+
+        c_box = ctk.CTkFrame(qris_loc_row, fg_color="transparent")
+        c_box.grid(row=0, column=0, sticky="ew", padx=(0, 4))
+        ctk.CTkLabel(c_box, text="Kota Toko:").pack(anchor="w")
+        self.ent_qris_city = ctk.CTkEntry(c_box)
+        self.ent_qris_city.insert(0, "JAKARTA")
+        self.ent_qris_city.pack(fill="x")
+        self.ent_qris_city.bind("<KeyRelease>", lambda e: self.generate_qr())
+
+        p_box = ctk.CTkFrame(qris_loc_row, fg_color="transparent")
+        p_box.grid(row=0, column=1, sticky="ew", padx=(4, 0))
+        ctk.CTkLabel(p_box, text="Kode Pos:").pack(anchor="w")
+        self.ent_qris_post = ctk.CTkEntry(p_box)
+        self.ent_qris_post.insert(0, "12345")
+        self.ent_qris_post.pack(fill="x")
+
+        ctk.CTkLabel(self.f_qris_new, text="Nominal Pembayaran (Rp) - Opsional:", font=ctk.CTkFont(weight="bold")).pack(anchor="w", padx=10, pady=(4, 2))
+        self.ent_qris_amount = ctk.CTkEntry(self.f_qris_new, placeholder_text="Contoh: 50000 (Kosongkan jika nominal bebas)")
+        self.ent_qris_amount.insert(0, "50000")
+        self.ent_qris_amount.pack(fill="x", padx=10, pady=(0, 4))
+        self.ent_qris_amount.bind("<KeyRelease>", lambda e: self.generate_qr())
+
+        # Card Ubah QRIS Statis Jadi Dinamis
+        self.f_qris_dyn = ctk.CTkFrame(self.f_qris, fg_color="transparent")
+
+        btn_load_row = ctk.CTkFrame(self.f_qris_dyn, fg_color="transparent")
+        btn_load_row.pack(fill="x", padx=10, pady=(2, 4))
+        ctk.CTkButton(
+            btn_load_row,
+            text="Ambil dari File / Foto QRIS...",
+            font=ctk.CTkFont(size=11, weight="bold"),
+            command=self._load_qris_from_image,
+        ).pack(side="left")
+
+        ctk.CTkLabel(self.f_qris_dyn, text="Payload QRIS Asli (Format EMVCo):", font=ctk.CTkFont(weight="bold")).pack(anchor="w", padx=10, pady=(2, 2))
+        self.txt_qris_raw = ctk.CTkTextbox(self.f_qris_dyn, height=65)
+        # Sample QRIS statis
+        sample_init_qris = "00020101021126440014ID.CO.QRIS.WWW0115ID10200211111110203UMI5204000053033605802ID5916WARUNG NUSANTARA6007JAKARTA610512345630483AC"
+        self.txt_qris_raw.insert("1.0", sample_init_qris)
+        self.txt_qris_raw.pack(fill="x", padx=10, pady=(0, 4))
+        self.txt_qris_raw.bind("<KeyRelease>", lambda e: self.generate_qr())
+
+        ctk.CTkLabel(self.f_qris_dyn, text="Nominal Pembayaran Baru (Rp):", font=ctk.CTkFont(weight="bold")).pack(anchor="w", padx=10, pady=(4, 2))
+        self.ent_qris_dyn_amount = ctk.CTkEntry(self.f_qris_dyn, placeholder_text="Contoh: 25000")
+        self.ent_qris_dyn_amount.insert(0, "25000")
+        self.ent_qris_dyn_amount.pack(fill="x", padx=10, pady=(0, 4))
+        self.ent_qris_dyn_amount.bind("<KeyRelease>", lambda e: self.generate_qr())
+
+        # Kustomisasi Logo & Gambar QRIS
+        qris_logo_card = ctk.CTkFrame(self.f_qris, fg_color=("gray90", "#1f1f23"), corner_radius=8)
+        qris_logo_card.pack(fill="x", padx=10, pady=(8, 4), ipady=6)
+
+        ctk.CTkLabel(qris_logo_card, text="Kustomisasi Gambar Logo QRIS:", font=ctk.CTkFont(size=12, weight="bold")).pack(anchor="w", padx=10, pady=(2, 2))
+
+        self.qris_logo_choice = ctk.CTkOptionMenu(
+            qris_logo_card,
+            values=["Logo Resmi QRIS (Bawaan)", "Logo Toko / Kustom Sendiri", "Tanpa Logo"],
+            command=self._on_qris_logo_choice_change,
+        )
+        self.qris_logo_choice.set("Logo Resmi QRIS (Bawaan)")
+        self.qris_logo_choice.pack(fill="x", padx=10, pady=(2, 6))
+
+        self.qris_custom_logo_row = ctk.CTkFrame(qris_logo_card, fg_color="transparent")
+        self.btn_pick_qris_logo = ctk.CTkButton(
+            self.qris_custom_logo_row,
+            text="Pilih Logo Toko...",
+            width=130,
+            command=self._choose_qris_merchant_logo,
+        )
+        self.btn_pick_qris_logo.pack(side="left")
+        self.lbl_qris_logo_status = ctk.CTkLabel(self.qris_custom_logo_row, text="Belum ada logo toko", font=ctk.CTkFont(size=11), text_color="gray50")
+        self.lbl_qris_logo_status.pack(side="left", padx=10)
+
+        # 3. Wi-Fi
         self.f_wifi = ctk.CTkFrame(self.form_container, fg_color="transparent")
         ctk.CTkLabel(self.f_wifi, text="Nama Jaringan (SSID):", font=ctk.CTkFont(weight="bold")).pack(anchor="w", padx=10, pady=(4, 2))
         self.ent_wifi_ssid = ctk.CTkEntry(self.f_wifi)
@@ -429,7 +547,7 @@ class QRApp(ctk.CTk):
         self.chk_wifi_hidden = ctk.CTkCheckBox(wifi_row2, text="Hidden SSID")
         self.chk_wifi_hidden.pack(side="right")
 
-        # 3. Kontak (vCard)
+        # 4. Kontak (vCard)
         self.f_vcard = ctk.CTkFrame(self.form_container, fg_color="transparent")
         ctk.CTkLabel(self.f_vcard, text="Nama Lengkap:", font=ctk.CTkFont(weight="bold")).pack(anchor="w", padx=10, pady=(2, 2))
         self.ent_vc_name = ctk.CTkEntry(self.f_vcard)
@@ -456,7 +574,7 @@ class QRApp(ctk.CTk):
         self.ent_vc_web.insert(0, "https://solusiteknologi.co.id")
         self.ent_vc_web.pack(fill="x", padx=10, pady=(0, 4))
 
-        # 4. WhatsApp
+        # 5. WhatsApp
         self.f_wa = ctk.CTkFrame(self.form_container, fg_color="transparent")
         ctk.CTkLabel(self.f_wa, text="Nomor WhatsApp (Kode Negara tanpa +):", font=ctk.CTkFont(weight="bold")).pack(anchor="w", padx=10, pady=(4, 2))
         self.ent_wa_phone = ctk.CTkEntry(self.f_wa)
@@ -468,7 +586,7 @@ class QRApp(ctk.CTk):
         self.txt_wa_msg.insert("1.0", "Halo kak, saya ingin informasi lebih lanjut mengenai tiket konser ini.")
         self.txt_wa_msg.pack(fill="x", padx=10, pady=(0, 4))
 
-        # 5. Email
+        # 6. Email
         self.f_mail = ctk.CTkFrame(self.form_container, fg_color="transparent")
         ctk.CTkLabel(self.f_mail, text="Email Tujuan:", font=ctk.CTkFont(weight="bold")).pack(anchor="w", padx=10, pady=(4, 2))
         self.ent_mail_to = ctk.CTkEntry(self.f_mail)
@@ -485,20 +603,89 @@ class QRApp(ctk.CTk):
         self.txt_mail_body.insert("1.0", "Halo, terlampir detail tiket saya...")
         self.txt_mail_body.pack(fill="x", padx=10, pady=(0, 4))
 
+    def _on_qris_submode_change(self, mode: str):
+        if mode == "Buat QRIS Baru":
+            self.f_qris_dyn.pack_forget()
+            self.f_qris_new.pack(fill="x")
+        else:
+            self.f_qris_new.pack_forget()
+            self.f_qris_dyn.pack(fill="x")
+        self.generate_qr()
+
+    def _on_qris_logo_choice_change(self, choice: str):
+        if choice == "Logo Toko / Kustom Sendiri":
+            self.qris_custom_logo_row.pack(fill="x", padx=10, pady=(0, 4))
+        else:
+            self.qris_custom_logo_row.pack_forget()
+        self.generate_qr()
+
+    def _choose_qris_merchant_logo(self):
+        filepath = filedialog.askopenfilename(
+            title="Pilih Gambar Logo Toko",
+            filetypes=[("Image Files", "*.png;*.jpg;*.jpeg;*.webp;*.ico"), ("Semua File", "*.*")],
+        )
+        if filepath:
+            self.qris_custom_logo_path = filepath
+            filename = os.path.basename(filepath)
+            self.lbl_qris_logo_status.configure(text=f"Logo: {filename}", text_color="#10b981")
+            self.generate_qr()
+
+    def _load_qris_from_image(self):
+        filepath = filedialog.askopenfilename(
+            title="Pilih Gambar QRIS Asli",
+            filetypes=[("Image Files", "*.png;*.jpg;*.jpeg;*.bmp;*.webp"), ("Semua File", "*.*")],
+        )
+        if filepath:
+            res = self.scanner_engine.scan_image_file(filepath)
+            if res and res.raw_text:
+                self.txt_qris_raw.delete("1.0", "end")
+                self.txt_qris_raw.insert("1.0", res.raw_text)
+                self._show_toast("[OK] Payload QRIS berhasil dibaca dari gambar!")
+                self.generate_qr()
+            else:
+                messagebox.showerror("Gagal", "Tidak dapat mendeteksi kode QRIS dari gambar yang dipilih.")
+
     def _show_form_for_category(self, cat: str):
-        for frame in (self.f_url, self.f_wifi, self.f_vcard, self.f_wa, self.f_mail):
+        for frame in (self.f_url, self.f_qris, self.f_wifi, self.f_vcard, self.f_wa, self.f_mail):
             frame.pack_forget()
 
         if "URL" in cat:
             self.f_url.pack(fill="x", padx=5, pady=5)
+            self.sec_lbl.pack(anchor="w", pady=(8, 4))
+            self.sec_frame.pack(fill="x", pady=(0, 12), padx=2, ipady=6)
+            self.logo_section_lbl.pack(anchor="w", pady=(8, 4))
+            self.logo_frame.pack(fill="x", pady=(0, 12), padx=2, ipady=6)
+        elif "QRIS" in cat:
+            self.f_qris.pack(fill="x", padx=5, pady=5)
+            # Sembunyikan enkripsi tiket saat mode QRIS
+            self.sec_lbl.pack_forget()
+            self.sec_frame.pack_forget()
+            self.logo_section_lbl.pack_forget()
+            self.logo_frame.pack_forget()
         elif "Wi-Fi" in cat:
             self.f_wifi.pack(fill="x", padx=5, pady=5)
+            self.sec_lbl.pack(anchor="w", pady=(8, 4))
+            self.sec_frame.pack(fill="x", pady=(0, 12), padx=2, ipady=6)
+            self.logo_section_lbl.pack(anchor="w", pady=(8, 4))
+            self.logo_frame.pack(fill="x", pady=(0, 12), padx=2, ipady=6)
         elif "Kontak" in cat:
             self.f_vcard.pack(fill="x", padx=5, pady=5)
+            self.sec_lbl.pack(anchor="w", pady=(8, 4))
+            self.sec_frame.pack(fill="x", pady=(0, 12), padx=2, ipady=6)
+            self.logo_section_lbl.pack(anchor="w", pady=(8, 4))
+            self.logo_frame.pack(fill="x", pady=(0, 12), padx=2, ipady=6)
         elif "WhatsApp" in cat:
             self.f_wa.pack(fill="x", padx=5, pady=5)
+            self.sec_lbl.pack(anchor="w", pady=(8, 4))
+            self.sec_frame.pack(fill="x", pady=(0, 12), padx=2, ipady=6)
+            self.logo_section_lbl.pack(anchor="w", pady=(8, 4))
+            self.logo_frame.pack(fill="x", pady=(0, 12), padx=2, ipady=6)
         elif "Email" in cat:
             self.f_mail.pack(fill="x", padx=5, pady=5)
+            self.sec_lbl.pack(anchor="w", pady=(8, 4))
+            self.sec_frame.pack(fill="x", pady=(0, 12), padx=2, ipady=6)
+            self.logo_section_lbl.pack(anchor="w", pady=(8, 4))
+            self.logo_frame.pack(fill="x", pady=(0, 12), padx=2, ipady=6)
 
     def _on_category_change(self, value: str):
         self.current_tab = value
@@ -514,7 +701,18 @@ class QRApp(ctk.CTk):
             font=ctk.CTkFont(size=14, weight="bold"),
             text_color=("#1e3a8a", "#60a5fa"),
         )
-        p_title.pack(anchor="w", padx=20, pady=(15, 6))
+        p_title.pack(anchor="w", padx=20, pady=(12, 4))
+
+        # Kontrol Pratinjau Khusus QRIS (Tampilan QR Saja vs Poster Standee)
+        self.qris_view_controls = ctk.CTkFrame(r, fg_color="transparent")
+        self.qris_preview_mode = ctk.CTkSegmentedButton(
+            self.qris_view_controls,
+            values=["Pratinjau QR Saja", "Pratinjau Poster Standee QRIS"],
+            command=lambda v: self.generate_qr(),
+            font=ctk.CTkFont(size=11, weight="bold"),
+        )
+        self.qris_preview_mode.set("Pratinjau QR Saja")
+        self.qris_preview_mode.pack(fill="x", padx=20, pady=(0, 6))
 
         self.preview_card = ctk.CTkFrame(
             r,
@@ -523,10 +721,10 @@ class QRApp(ctk.CTk):
             border_width=1,
             border_color=("gray75", "#27272a"),
         )
-        self.preview_card.pack(fill="both", expand=True, padx=20, pady=(0, 8))
+        self.preview_card.pack(fill="both", expand=True, padx=20, pady=(0, 6))
 
         self.qr_preview_label = ctk.CTkLabel(self.preview_card, text="Memuat QR Code...")
-        self.qr_preview_label.pack(expand=True, padx=15, pady=15)
+        self.qr_preview_label.pack(expand=True, padx=10, pady=10)
 
         self.info_status_lbl = ctk.CTkLabel(
             r,
@@ -534,10 +732,10 @@ class QRApp(ctk.CTk):
             font=ctk.CTkFont(size=11),
             text_color="gray50",
         )
-        self.info_status_lbl.pack(pady=(0, 6))
+        self.info_status_lbl.pack(pady=(0, 4))
 
         res_row = ctk.CTkFrame(r, fg_color="transparent")
-        res_row.pack(fill="x", padx=20, pady=(0, 8))
+        res_row.pack(fill="x", padx=20, pady=(0, 6))
         ctk.CTkLabel(res_row, text="Resolusi Simpan PNG:", font=ctk.CTkFont(size=12, weight="bold")).pack(side="left")
         self.export_res_menu = ctk.CTkOptionMenu(
             res_row,
@@ -553,16 +751,27 @@ class QRApp(ctk.CTk):
         self.export_res_menu.pack(side="right")
 
         action_box = ctk.CTkFrame(r, fg_color="transparent")
-        action_box.pack(fill="x", padx=20, pady=(0, 10))
+        action_box.pack(fill="x", padx=20, pady=(0, 8))
 
         self.btn_refresh = ctk.CTkButton(
             action_box,
             text="Perbarui Tampilan QR",
-            height=36,
+            height=34,
             font=ctk.CTkFont(size=13, weight="bold"),
             command=self.generate_qr,
         )
-        self.btn_refresh.pack(fill="x", pady=(0, 6))
+        self.btn_refresh.pack(fill="x", pady=(0, 4))
+
+        # Tombol Khusus Simpan Poster Standee QRIS
+        self.btn_save_poster = ctk.CTkButton(
+            action_box,
+            text="Simpan Poster Standee QRIS (Cetak HD)",
+            height=36,
+            fg_color="#dc2626",
+            hover_color="#b91c1c",
+            font=ctk.CTkFont(size=12, weight="bold"),
+            command=self._save_as_poster,
+        )
 
         grid_btns = ctk.CTkFrame(action_box, fg_color="transparent")
         grid_btns.pack(fill="x")
@@ -599,7 +808,7 @@ class QRApp(ctk.CTk):
             font=ctk.CTkFont(size=12, weight="bold"),
             command=self._copy_to_clipboard,
         )
-        self.btn_copy_clip.pack(fill="x", pady=(6, 0))
+        self.btn_copy_clip.pack(fill="x", pady=(4, 0))
 
         self.toast_label = ctk.CTkLabel(
             r,
@@ -607,7 +816,7 @@ class QRApp(ctk.CTk):
             font=ctk.CTkFont(size=12, weight="bold"),
             text_color="#10b981",
         )
-        self.toast_label.pack(pady=(0, 8))
+        self.toast_label.pack(pady=(0, 6))
 
     def _show_toast(self, message: str, is_error: bool = False):
         self.toast_label.configure(
@@ -621,6 +830,30 @@ class QRApp(ctk.CTk):
         raw = ""
         if "URL" in cat:
             raw = self.txt_url.get("1.0", "end-1c").strip()
+        elif "QRIS" in cat:
+            submode = self.qris_mode_seg.get()
+            if submode == "Buat QRIS Baru":
+                m_name = self.ent_qris_name.get().strip() or "WARUNG NUSANTARA"
+                nmid = self.ent_qris_nmid.get().strip() or "ID1020021111111"
+                city = self.ent_qris_city.get().strip() or "JAKARTA"
+                post = self.ent_qris_post.get().strip() or "12345"
+                amt_str = self.ent_qris_amount.get().strip()
+                amt = int(amt_str) if amt_str.isdigit() and int(amt_str) > 0 else None
+                raw = QRISCore.create_qris(
+                    merchant_name=m_name,
+                    nmid=nmid,
+                    city=city,
+                    amount=amt,
+                    postal_code=post,
+                )
+            else:
+                base_qris = self.txt_qris_raw.get("1.0", "end-1c").strip()
+                amt_str = self.ent_qris_dyn_amount.get().strip()
+                amt = int(amt_str) if amt_str.isdigit() and int(amt_str) > 0 else None
+                if amt:
+                    raw = QRISCore.convert_static_to_dynamic(base_qris, amt)
+                else:
+                    raw = base_qris
         elif "Wi-Fi" in cat:
             ssid = self.ent_wifi_ssid.get()
             pwd = self.ent_wifi_pwd.get()
@@ -647,8 +880,8 @@ class QRApp(ctk.CTk):
         if not raw:
             raw = "TKT-DEMO-001"
 
-        # Cek jika enkripsi aktif
-        if hasattr(self, "chk_encrypt") and self.chk_encrypt.get() == 1:
+        # Cek jika enkripsi aktif (hanya di luar mode QRIS)
+        if "QRIS" not in cat and hasattr(self, "chk_encrypt") and self.chk_encrypt.get() == 1:
             key = self.ent_secret_key.get().strip()
             if key:
                 return bridge.encrypt_ticket(raw, key)
@@ -656,6 +889,15 @@ class QRApp(ctk.CTk):
 
     def generate_qr(self):
         payload = self._extract_payload_data()
+        is_qris = "QRIS" in self.current_tab
+
+        # Tampilkan atau sembunyikan kontrol poster jika tab QRIS
+        if is_qris:
+            self.qris_view_controls.pack(fill="x", padx=20, pady=(0, 6), before=self.preview_card)
+            self.btn_save_poster.pack(fill="x", pady=(0, 4), before=self.btn_save_png.master)
+        else:
+            self.qris_view_controls.pack_forget()
+            self.btn_save_poster.pack_forget()
 
         ec_val = self.ec_menu.get()
         ec_code = "H"
@@ -665,6 +907,10 @@ class QRApp(ctk.CTk):
             ec_code = "M"
         elif "L -" in ec_val:
             ec_code = "L"
+
+        # Jika QRIS, otomatis wajib minimal H agar logo QRIS tidak mengganggu scannability
+        if is_qris:
+            ec_code = "H"
 
         bg = "transparent" if self.is_transparent_bg else self.back_color
 
@@ -677,18 +923,30 @@ class QRApp(ctk.CTk):
             border=2,
         )
 
-        if self.selected_logo_path and os.path.exists(self.selected_logo_path):
-            shape_str = self.logo_shape_menu.get()
-            shape_key = "rounded"
-            if "Lingkaran" in shape_str:
-                shape_key = "circle"
-            elif "Persegi" in shape_str:
-                shape_key = "square"
-            elif "Tanpa" in shape_str:
-                shape_key = "none"
+        # Penanganan Logo (Normal vs QRIS)
+        if is_qris:
+            logo_choice = self.qris_logo_choice.get()
+            if logo_choice == "Logo Resmi QRIS (Bawaan)":
+                badge = QRISPosterGenerator.create_qris_center_badge()
+                if not self.temp_qris_badge_path:
+                    self.temp_qris_badge_path = os.path.join(tempfile.gettempdir(), "qris_badge_tmp.png")
+                badge.save(self.temp_qris_badge_path, format="PNG")
+                engine.set_logo(self.temp_qris_badge_path, shape="rounded", size_ratio=0.22)
+            elif logo_choice == "Logo Toko / Kustom Sendiri" and self.qris_custom_logo_path and os.path.exists(self.qris_custom_logo_path):
+                engine.set_logo(self.qris_custom_logo_path, shape="rounded", size_ratio=0.24)
+        else:
+            if self.selected_logo_path and os.path.exists(self.selected_logo_path):
+                shape_str = self.logo_shape_menu.get()
+                shape_key = "rounded"
+                if "Lingkaran" in shape_str:
+                    shape_key = "circle"
+                elif "Persegi" in shape_str:
+                    shape_key = "square"
+                elif "Tanpa" in shape_str:
+                    shape_key = "none"
 
-            size_ratio = float(self.logo_size_slider.get())
-            engine.set_logo(self.selected_logo_path, shape=shape_key, size_ratio=size_ratio)
+                size_ratio = float(self.logo_size_slider.get())
+                engine.set_logo(self.selected_logo_path, shape=shape_key, size_ratio=size_ratio)
 
         self.qr_engine_instance = engine
 
@@ -696,22 +954,58 @@ class QRApp(ctk.CTk):
             pil_img = engine.generate_image()
             self.current_pil_image = pil_img
 
-            preview_max_dim = 290
-            w, h = pil_img.size
-            ratio = min(preview_max_dim / w, preview_max_dim / h)
-            disp_w = int(w * ratio)
-            disp_h = int(h * ratio)
+            # Cek apakah pengguna memilih tampilan Poster Standee QRIS
+            show_poster = is_qris and (self.qris_preview_mode.get() == "Pratinjau Poster Standee QRIS")
 
-            display_img = pil_img.resize((disp_w, disp_h), Image.Resampling.LANCZOS)
-            ctk_img = ctk.CTkImage(light_image=display_img, dark_image=display_img, size=(disp_w, disp_h))
+            if show_poster:
+                info = QRISCore.extract_info(payload)
+                poster = QRISPosterGenerator.generate_poster(
+                    qr_image=pil_img,
+                    merchant_name=info["merchant_name"],
+                    nmid=info["nmid"],
+                    amount=info["amount"],
+                    city=info["city"],
+                    custom_logo_path=self.qris_custom_logo_path,
+                )
+                self.current_poster_image = poster
 
-            self.qr_preview_label.configure(image=ctk_img, text="")
-            self.qr_preview_label.image = ctk_img
+                # Scale agar pas di container preview (tinggi ~340)
+                disp_h = 340
+                disp_w = int(poster.width * (disp_h / poster.height))
+                display_poster = poster.resize((disp_w, disp_h), Image.Resampling.LANCZOS)
+                ctk_img = ctk.CTkImage(light_image=display_poster, dark_image=display_poster, size=(disp_w, disp_h))
 
-            enc_tag = " [Enkripsi C++ Aktif]" if payload.startswith("SECQR1:") else ""
-            self.info_status_lbl.configure(
-                text=f"Ukuran: {w}x{h} px | Koreksi: {ec_code}{enc_tag} | Siap Diekspor"
-            )
+                self.qr_preview_label.configure(image=ctk_img, text="")
+                self.qr_preview_label.image = ctk_img
+
+                amt_lbl = f"Rp {info['amount']:,}".replace(",", ".") if info['amount'] else "Nominal Bebas"
+                self.info_status_lbl.configure(
+                    text=f"Poster Standee QRIS | {info['merchant_name']} | {amt_lbl} | Siap Dicetak"
+                )
+            else:
+                preview_max_dim = 280
+                w, h = pil_img.size
+                ratio = min(preview_max_dim / w, preview_max_dim / h)
+                disp_w = int(w * ratio)
+                disp_h = int(h * ratio)
+
+                display_img = pil_img.resize((disp_w, disp_h), Image.Resampling.LANCZOS)
+                ctk_img = ctk.CTkImage(light_image=display_img, dark_image=display_img, size=(disp_w, disp_h))
+
+                self.qr_preview_label.configure(image=ctk_img, text="")
+                self.qr_preview_label.image = ctk_img
+
+                if is_qris:
+                    info = QRISCore.extract_info(payload)
+                    amt_lbl = f"Rp {info['amount']:,}".replace(",", ".") if info['amount'] else "Nominal Bebas"
+                    self.info_status_lbl.configure(
+                        text=f"QRIS {info['merchant_name']} | {amt_lbl} | Siap Digunakan"
+                    )
+                else:
+                    enc_tag = " [Enkripsi C++ Aktif]" if payload.startswith("SECQR1:") else ""
+                    self.info_status_lbl.configure(
+                        text=f"Ukuran: {w}x{h} px | Koreksi: {ec_code}{enc_tag} | Siap Diekspor"
+                    )
         except Exception as err:
             self._show_toast(f"Error: {str(err)}", is_error=True)
 
@@ -815,6 +1109,29 @@ class QRApp(ctk.CTk):
             except Exception as e:
                 messagebox.showerror("Gagal Menyimpan", f"Terjadi kesalahan saat menyimpan PNG:\n{str(e)}")
 
+    def _save_as_poster(self):
+        """Menyimpan berkas display poster standee QRIS beresolusi tinggi."""
+        if not self.current_poster_image:
+            self.generate_qr()
+
+        if self.current_poster_image:
+            filepath = filedialog.asksaveasfilename(
+                title="Simpan Poster Standee QRIS Siap Cetak",
+                defaultextension=".png",
+                filetypes=[("PNG High Resolution (*.png)", "*.png"), ("JPEG Image (*.jpg)", "*.jpg")],
+            )
+            if filepath:
+                try:
+                    self.current_poster_image.save(filepath, quality=98)
+                    self._show_toast(f"[OK] Poster Standee disimpan ke: {os.path.basename(filepath)}")
+                    messagebox.showinfo(
+                        "Poster QRIS Disimpan",
+                        f"Poster Standee Pembayaran QRIS berhasil disimpan ke:\n{filepath}\n\n"
+                        "Berkas ini siap dicetak pada akrilik meja atau kertas foto display toko.",
+                    )
+                except Exception as e:
+                    messagebox.showerror("Gagal Menyimpan", f"Gagal menyimpan poster:\n{str(e)}")
+
     def _save_as_svg(self):
         if not self.qr_engine_instance:
             self.generate_qr()
@@ -832,11 +1149,17 @@ class QRApp(ctk.CTk):
                 messagebox.showerror("Gagal Menyimpan", f"Terjadi kesalahan saat menyimpan SVG:\n{str(e)}")
 
     def _copy_to_clipboard(self):
-        if not self.current_pil_image:
-            self.generate_qr()
+        # Jika sedang menampilkan poster, salin poster, jika tidak salin QR
+        is_qris = "QRIS" in self.current_tab
+        show_poster = is_qris and (self.qris_preview_mode.get() == "Pratinjau Poster Standee QRIS")
+        img_to_copy = self.current_poster_image if show_poster else self.current_pil_image
 
-        if self.current_pil_image:
-            success, msg = copy_image_to_clipboard(self.current_pil_image)
+        if not img_to_copy:
+            self.generate_qr()
+            img_to_copy = self.current_poster_image if show_poster else self.current_pil_image
+
+        if img_to_copy:
+            success, msg = copy_image_to_clipboard(img_to_copy)
             if success:
                 self._show_toast("[OK] Gambar berhasil disalin ke Clipboard!")
             else:
@@ -1237,8 +1560,11 @@ class QRApp(ctk.CTk):
             # Perlu Kunci
             self.scan_badge.configure(text="[KUNCI DIBUTUHKAN] TIKET TERENKRIPSI", fg_color="#f59e0b", text_color="#000000")
         else:
-            # QR Normal / Plain text
-            self.scan_badge.configure(text="QR CODE BIASA TERDETEKSI", fg_color="#3b82f6", text_color="#ffffff")
+            # QR Normal / Plain text / QRIS
+            if res.raw_text.startswith("000201"):
+                self.scan_badge.configure(text="QRIS PEMBAYARAN TERDETEKSI", fg_color="#0284c7", text_color="#ffffff")
+            else:
+                self.scan_badge.configure(text="QR CODE BIASA TERDETEKSI", fg_color="#3b82f6", text_color="#ffffff")
 
         self.txt_scan_content.delete("1.0", "end")
         details = (
@@ -1247,3 +1573,12 @@ class QRApp(ctk.CTk):
             f"Raw Payload Token:\n{res.raw_text}"
         )
         self.txt_scan_content.insert("1.0", details)
+
+
+def main():
+    app = QRApp()
+    app.mainloop()
+
+
+if __name__ == "__main__":
+    main()

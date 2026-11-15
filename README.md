@@ -1,25 +1,40 @@
 # QR Studio Pro - High-Performance QR Suite (Python + C++)
 
-Aplikasi Desktop modern berbasis Python dengan integrasi C++ Native Engine untuk pembuatan, pencetakan massal (batch generation), pengamanan enkripsi tiket (anti-pemalsuan), serta scanner webcam real-time.
+Aplikasi Desktop modern berbasis Python dengan integrasi C++ Native Engine untuk pembuatan QR Code, QRIS Pembayaran Nasional (Statis & Dinamis dengan Custom Gambar), pencetakan massal (batch generation), pengamanan enkripsi tiket (anti-pemalsuan), serta scanner webcam real-time.
 
 ---
 
-## 3 Pilar Integrasi C++ & Fitur Unggulan
+## Fitur Unggulan
 
-### 1. Keamanan & Enkripsi Tiket C++ (Anti-Pemalsuan)
-- Menggunakan algoritma kriptografi autentikasi tingkat rendah HMAC-SHA256 + Stream Cipher + Nonce (cpp/crypto.hpp & core/security.py).
-- Mencegah pemalsuan tiket: Jika seseorang mencoba mengedit atau memodifikasi payload QR Code, signature digital C++ otomatis gagal diverifikasi dan menampilkan peringatan "[PERINGATAN] TIKET PALSU ATAU KUNCI SALAH!".
+### 1. QRIS Pembayaran Nasional & Custom Gambar
+- Standar EMVCo / Bank Indonesia & ASPI dengan perhitungan checksum CRC16-CCITT otomatis.
+- Mode Buat QRIS Baru: Memasukkan Nama Toko / Merchant, NMID, Kota, Kode Pos, dan Nominal Pembayaran (Rp).
+- Mode Ubah QRIS Statis Jadi Dinamis: Mengubah QRIS yang sudah ada (dari BCA, GoPay, OVO, Dana, ShopeePay, Mandiri, dll.) dengan menyuntikkan nominal bayar tertentu.
+- Kustomisasi Gambar Logo:
+  - Emblem resmi QRIS otomatis di tengah QR Code dengan badge pelindung.
+  - Opsi unggah Logo Toko / Usaha kustom sendiri.
+- Pembuat Poster Standee Meja QRIS Lengkap Siap Cetak:
+  - Header resmi merah QRIS & Bank Indonesia.
+  - Nama Merchant & NMID toko.
+  - Frame QR Code beresolusi tinggi dengan logo kustom.
+  - Highlight pill nominal pembayaran (Rp) atau petunjuk bayar.
+  - Footer daftar mitra e-wallet & mobile banking (BCA, Mandiri, BNI, BRI, GoPay, OVO, Dana, ShopeePay, LinkAja).
+  - Tombol simpan Poster Standee resolusi tinggi (740 x 1060 px).
+
+### 2. Keamanan & Enkripsi Tiket C++ (Anti-Pemalsuan)
+- Algoritma autentikasi kriptografi tingkat rendah HMAC-SHA256 + Stream Cipher + Nonce (cpp/crypto.hpp & core/security.py).
+- Mencegah pemalsuan tiket: Jika seseorang mencoba mengedit payload QR Code, signature digital C++ otomatis gagal diverifikasi dan menampilkan peringatan "[PERINGATAN] TIKET PALSU ATAU KUNCI SALAH!".
 - Hanya tiket yang dibuat dan diverifikasi dengan Kunci Rahasia (Secret Key) yang sama yang akan menampilkan status "[VALID] TIKET ASLI TERVERIFIKASI".
 
-### 2. High-Performance Batch Generator (Pencetakan Massal)
-- Mencetak ratusan hingga puluhan ribu QR Code dalam hitungan detik menggunakan multi-threading.
+### 3. High-Performance Batch Generator (Pencetakan Massal)
+- Mencetak ratusan hingga puluhan ribu QR Code dalam hitungan detik menggunakan multi-threading C++.
 - Otomatis membuat berkas rekap manifest_tiket.csv berisi daftar ID Tiket, QR Payload terenkripsi, nama file gambar, dan timestamp pembuatan.
 - Dilengkapi fitur Uji Benchmark Speed untuk mengukur kecepatan pemrosesan QR Code per detik.
 
-### 3. Fast Scanner Real-Time (Webcam OpenCV & File)
+### 4. Fast Scanner Real-Time (Webcam OpenCV & File)
 - Pemindaian langsung menggunakan kamera webcam laptop/PC (OpenCV cv2.QRCodeDetector).
 - Deteksi real-time dengan penanda kotak hijau/merah di sekeliling QR Code.
-- Verifikasi instan: otomatis mendekripsi dan mengecek keaslian token tiket saat tertangkap kamera.
+- Verifikasi instan: otomatis mendekripsi dan mengecek keaslian token tiket atau mengenali format QRIS saat tertangkap kamera.
 - Opsi scan langsung dari berkas gambar lokal (PNG, JPG, BMP).
 
 ---
@@ -67,6 +82,7 @@ QR PYTHON/
 |   |-- qr_native.cpp         # Main C++ engine & C-export DLL
 |   `-- build_cpp.bat         # Script kompilasi g++
 |-- core/
+|   |-- qris.py               # Engine QRIS Bank Indonesia & Generator Poster
 |   |-- qr_engine.py          # Engine utama QR Python & SVG
 |   |-- security.py           # Protokol kriptografi interoperabel Python
 |   |-- cpp_bridge.py         # Jembatan penghubung C++ dan Python

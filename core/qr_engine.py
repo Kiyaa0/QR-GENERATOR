@@ -107,6 +107,23 @@ class QRFormatters:
         query = f"?{'&'.join(params)}" if params else ""
         return f"mailto:{to.strip()}{query}"
 
+    @staticmethod
+    def qris(
+        merchant_name: str,
+        nmid: str = "",
+        city: str = "JAKARTA",
+        amount: Optional[int] = None,
+    ) -> str:
+        """Format pembayaran standar QRIS Bank Indonesia."""
+        from core.qris import QRISCore
+        return QRISCore.create_qris(
+            merchant_name=merchant_name,
+            nmid=nmid,
+            city=city,
+            amount=amount,
+        )
+
+
 
 class QREngine:
     """Engine utama untuk meng-generate dan mengkustomisasi QR Code."""
