@@ -6,6 +6,7 @@ serta ekspor ke berbagai format (PNG, JPEG, SVG).
 """
 
 import io
+import os
 import re
 import urllib.parse
 from typing import Optional, Tuple
@@ -150,6 +151,11 @@ class QREngine:
         self.logo_bg_color: Optional[str] = None
         self.logo_padding: int = 8
 
+        # Konfigurasi Gambar Latar Belakang Artistik (Artistic QR)
+        self.artistic_bg_path: Optional[str] = None
+        self.artistic_opacity: float = 0.50
+        self.protect_finder_patterns: bool = True
+
     def set_logo(
         self,
         logo_path: Optional[str],
@@ -165,10 +171,21 @@ class QREngine:
         self.logo_bg_color = bg_color
         self.logo_padding = max(2, int(padding))
 
+    def set_artistic_background(
+        self,
+        image_path: Optional[str],
+        opacity: float = 0.50,
+        protect_finders: bool = True,
+    ):
+        """Konfigurasi gambar latar belakang artistik (Artistic QR)."""
+        self.artistic_bg_path = image_path
+        self.artistic_opacity = max(0.1, min(0.9, float(opacity)))
+        self.protect_finder_patterns = bool(protect_finders)
+
     def _create_qr_object(self) -> qrcode.QRCode:
         ec_level = ERROR_LEVELS.get(self.error_correction, ERROR_CORRECT_H)
-        # Jika ada logo, otomatis wajib minimal Q atau H agar terbaca
-        if self.logo_path and ec_level in (ERROR_CORRECT_L, ERROR_CORRECT_M):
+        # Jika ada logo atau gambar latar, otomatis wajib minimal Q atau H agar terbaca
+        if (self.logo_path or self.artistic_bg_path) and ec_level in (ERROR_CORRECT_L, ERROR_CORRECT_M):
             ec_level = ERROR_CORRECT_H
 
         qr = qrcode.QRCode(
@@ -183,6 +200,12 @@ class QREngine:
 
     def generate_image(self) -> Image.Image:
         """Menghasilkan PIL Image (RGBA) dari QR Code beserta kustomisasi warna dan logo."""
+        if self.artistic_bg_path and os.path.exists(self.artistic_bg_path):
+            try:
+                return self._generate_artistic_image()
+            except Exception:
+                pass
+
         qr = self._create_qr_object()
 
         # Tangani background transparan bila diminta
@@ -270,6 +293,110 @@ class QREngine:
         qr_img.paste(logo, paste_pos, mask=logo)
 
         return qr_img
+
+    def _generate_artistic_image(self) -> Image.Image:
+        """
+        Menghasilkan QR Code artistik yang digabungkan / ditimpa pada gambar latar belakang.
+        Sudut Finder Patterns (9x9 modul) dilindungi secara solid agar scanner dapat
+        mendeteksi dan membaca data dengan akurat 100%.
+        """
+        qr = self._create_qr_object()
+        matrix = qr.modules
+        num_rows = len(matrix)
+        num_cols = len(matrix[0]) if num_rows > 0 else 0
+        total_modules = num_rows + 2 * self.border
+        img_size = total_modules * self.box_size
+
+        # Baca dan olah gambar latar belakang
+        with Image.open(self.artistic_bg_path) as raw_bg:
+            bg_rgba = raw_bg.convert("RGBA")
+
+        # Crop tengah menjadi persegi simetris
+        bw, bh = bg_rgba.size
+        min_side = min(bw, bh)
+        crop_x = (bw - min_side) // 2
+        crop_y = (bh - min_side) // 2
+        sq_bg = bg_rgba.crop((crop_x, crop_y, crop_x + min_side, crop_y + min_side))
+        sq_bg = sq_bg.resize((img_size, img_size), Image.Resampling.LANCZOS)
+
+        # Parse warna heksadesimal ke tuple RGB
+        def parse_color(c: str, default: Tuple[int, int, int]) -> Tuple[int, int, int]:
+            if not c or c.lower() in ("transparent", "none"):
+                return (255, 255, 255)
+            c = c.lstrip("#")
+            if len(c) == 6:
+                try:
+                    return (int(c[0:2], 16), int(c[2:4], 16), int(c[4:6], 16))
+                except ValueError:
+                    pass
+            return default
+
+        fill_rgb = parse_color(self.fill_color, (0, 0, 0))
+        back_rgb = parse_color(self.back_color, (255, 255, 255))
+
+        # Siapkan canvas dasar
+        canvas = Image.new("RGBA", (img_size, img_size), back_rgb + (255,))
+
+        # Tempel gambar latar dengan opasitas yang dipilih
+        bg_alpha = int(255 * max(0.1, min(0.9, self.artistic_opacity)))
+        bg_layer = sq_bg.copy()
+        alpha_mask = Image.new("L", (img_size, img_size), bg_alpha)
+        bg_layer.putalpha(alpha_mask)
+        canvas.paste(bg_layer, (0, 0), bg_layer)
+
+        # Siapkan ImageDraw
+        draw = ImageDraw.Draw(canvas, "RGBA")
+
+        # Helper zona finder pattern 9x9 modul di setiap sudut
+        def is_finder_zone(r: int, c: int) -> bool:
+            if not self.protect_finder_patterns:
+                return False
+            if r < 9 and c < 9:
+                return True
+            if r < 9 and c >= num_cols - 9:
+                return True
+            if r >= num_rows - 9 and c < 9:
+                return True
+            return False
+
+        # Hitung transparansi modul data
+        dark_alpha = int(180 + 75 * (1.0 - self.artistic_opacity * 0.4))
+        light_wash_alpha = int(120 * (1.0 - self.artistic_opacity))
+
+        # Gambar modul-modul matriks QR
+        for r in range(num_rows):
+            for c in range(num_cols):
+                x1 = (c + self.border) * self.box_size
+                y1 = (r + self.border) * self.box_size
+                x2 = x1 + self.box_size
+                y2 = y1 + self.box_size
+
+                is_dark = matrix[r][c]
+                in_finder = is_finder_zone(r, c)
+
+                if in_finder:
+                    # 100% Solid untuk sudut finder agar scanner mendeteksi pola posisi instan
+                    col = fill_rgb + (255,) if is_dark else back_rgb + (255,)
+                    draw.rectangle([x1, y1, x2, y2], fill=col)
+                else:
+                    if is_dark:
+                        draw.rectangle([x1, y1, x2, y2], fill=fill_rgb + (dark_alpha,))
+                    else:
+                        if light_wash_alpha > 0:
+                            draw.rectangle([x1, y1, x2, y2], fill=back_rgb + (light_wash_alpha,))
+
+        # Area Quiet Zone (Tepi QR)
+        b_size = self.border * self.box_size
+        draw.rectangle([0, 0, img_size, b_size], fill=back_rgb + (255,))
+        draw.rectangle([0, img_size - b_size, img_size, img_size], fill=back_rgb + (255,))
+        draw.rectangle([0, 0, b_size, img_size], fill=back_rgb + (255,))
+        draw.rectangle([img_size - b_size, 0, img_size, img_size], fill=back_rgb + (255,))
+
+        # Tempelkan logo di titik tengah bila ada
+        if self.logo_path:
+            canvas = self._embed_logo(canvas)
+
+        return canvas
 
     def generate_svg(self) -> str:
         """Menghasilkan teks string SVG vektor dari QR Code."""

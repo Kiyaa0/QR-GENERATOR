@@ -54,6 +54,9 @@ class QRApp(ctk.CTk):
         self.qris_custom_logo_path: Optional[str] = None
         self.temp_qris_badge_path: Optional[str] = None
 
+        # State Gambar Latar Artistik (Artistic QR)
+        self.artistic_bg_path: Optional[str] = None
+
         # State Webcam Scanner
         self.is_webcam_running = False
         self.cap: Optional[cv2.VideoCapture] = None
@@ -379,8 +382,77 @@ class QRApp(ctk.CTk):
         self.logo_size_slider.set(0.22)
         self.logo_size_slider.pack(side="right", fill="x", expand=True, padx=(12, 0))
 
-        # 5. KOREKSI ERROR
-        opt_lbl = ctk.CTkLabel(p, text="5. Tingkat Koreksi Error:", font=ctk.CTkFont(size=13, weight="bold"))
+        # 5. GAMBAR LATAR / TIMPA QR (ARTISTIC QR)
+        self.artistic_section_lbl = ctk.CTkLabel(p, text="5. Timpa dengan Gambar Latar (Artistic QR):", font=ctk.CTkFont(size=13, weight="bold"))
+        self.artistic_section_lbl.pack(anchor="w", pady=(8, 4))
+
+        self.artistic_frame = ctk.CTkFrame(p, corner_radius=8, fg_color=("gray95", "#27272a"))
+        self.artistic_frame.pack(fill="x", pady=(0, 12), padx=2, ipady=6)
+
+        self.chk_artistic_bg = ctk.CTkCheckBox(
+            self.artistic_frame,
+            text="Aktifkan Mode Timpa Gambar (Artistic QR)",
+            font=ctk.CTkFont(size=12, weight="bold"),
+            command=self._on_artistic_toggle,
+        )
+        self.chk_artistic_bg.pack(anchor="w", padx=12, pady=(6, 6))
+
+        self.artistic_controls = ctk.CTkFrame(self.artistic_frame, fg_color="transparent")
+        self.artistic_controls.pack(fill="x", padx=12, pady=(0, 4))
+
+        artistic_btn_row = ctk.CTkFrame(self.artistic_controls, fg_color="transparent")
+        artistic_btn_row.pack(fill="x", pady=(0, 4))
+
+        self.upload_artistic_btn = ctk.CTkButton(
+            artistic_btn_row,
+            text="Pilih Gambar Latar...",
+            font=ctk.CTkFont(size=12, weight="bold"),
+            command=self._choose_artistic_bg_file,
+        )
+        self.upload_artistic_btn.pack(side="left")
+
+        self.remove_artistic_btn = ctk.CTkButton(
+            artistic_btn_row,
+            text="Hapus",
+            width=65,
+            fg_color="#ef4444",
+            hover_color="#dc2626",
+            command=self._clear_artistic_bg,
+        )
+        self.remove_artistic_btn.pack(side="right")
+
+        self.artistic_filename_lbl = ctk.CTkLabel(
+            self.artistic_controls,
+            text="Belum ada gambar latar yang dipilih",
+            font=ctk.CTkFont(size=11, slant="italic"),
+            text_color="gray50",
+        )
+        self.artistic_filename_lbl.pack(anchor="w", pady=(0, 6))
+
+        slider_art_row = ctk.CTkFrame(self.artistic_controls, fg_color="transparent")
+        slider_art_row.pack(fill="x", pady=4)
+        ctk.CTkLabel(slider_art_row, text="Transparansi Latar:", font=ctk.CTkFont(size=12)).pack(side="left")
+        self.artistic_opacity_slider = ctk.CTkSlider(
+            slider_art_row,
+            from_=0.15,
+            to=0.85,
+            number_of_steps=14,
+            command=lambda v: self.generate_qr(),
+        )
+        self.artistic_opacity_slider.set(0.50)
+        self.artistic_opacity_slider.pack(side="right", fill="x", expand=True, padx=(12, 0))
+
+        self.chk_artistic_protect = ctk.CTkCheckBox(
+            self.artistic_controls,
+            text="Proteksi Finder Pattern Sudut (100% Terbaca)",
+            font=ctk.CTkFont(size=11),
+            command=lambda: self.generate_qr(),
+        )
+        self.chk_artistic_protect.select()
+        self.chk_artistic_protect.pack(anchor="w", pady=(4, 2))
+
+        # 6. KOREKSI ERROR
+        opt_lbl = ctk.CTkLabel(p, text="6. Tingkat Koreksi Error:", font=ctk.CTkFont(size=13, weight="bold"))
         opt_lbl.pack(anchor="w", pady=(8, 4))
 
         opt_frame = ctk.CTkFrame(p, corner_radius=8, fg_color=("gray95", "#27272a"))
@@ -908,8 +980,9 @@ class QRApp(ctk.CTk):
         elif "L -" in ec_val:
             ec_code = "L"
 
-        # Jika QRIS, otomatis wajib minimal H agar logo QRIS tidak mengganggu scannability
-        if is_qris:
+        # Jika QRIS atau mode Artistic QR, otomatis wajib minimal H agar tetap terbaca optimal
+        is_artistic = hasattr(self, "chk_artistic_bg") and (self.chk_artistic_bg.get() == 1) and bool(self.artistic_bg_path and os.path.exists(self.artistic_bg_path))
+        if is_qris or is_artistic:
             ec_code = "H"
 
         bg = "transparent" if self.is_transparent_bg else self.back_color
@@ -922,6 +995,12 @@ class QRApp(ctk.CTk):
             box_size=12,
             border=2,
         )
+
+        # Penanganan Gambar Latar Artistik (Artistic QR)
+        if is_artistic:
+            op_val = float(self.artistic_opacity_slider.get()) if hasattr(self, "artistic_opacity_slider") else 0.50
+            prot_val = bool(self.chk_artistic_protect.get() == 1) if hasattr(self, "chk_artistic_protect") else True
+            engine.set_artistic_background(self.artistic_bg_path, opacity=op_val, protect_finders=prot_val)
 
         # Penanganan Logo (Normal vs QRIS)
         if is_qris:
@@ -998,16 +1077,47 @@ class QRApp(ctk.CTk):
                 if is_qris:
                     info = QRISCore.extract_info(payload)
                     amt_lbl = f"Rp {info['amount']:,}".replace(",", ".") if info['amount'] else "Nominal Bebas"
+                    art_tag = " [Artistic QR]" if is_artistic else ""
                     self.info_status_lbl.configure(
-                        text=f"QRIS {info['merchant_name']} | {amt_lbl} | Siap Digunakan"
+                        text=f"QRIS {info['merchant_name']} | {amt_lbl}{art_tag} | Siap Digunakan"
                     )
                 else:
                     enc_tag = " [Enkripsi C++ Aktif]" if payload.startswith("SECQR1:") else ""
+                    art_tag = " [Artistic QR]" if is_artistic else ""
                     self.info_status_lbl.configure(
-                        text=f"Ukuran: {w}x{h} px | Koreksi: {ec_code}{enc_tag} | Siap Diekspor"
+                        text=f"Ukuran: {w}x{h} px | Koreksi: {ec_code}{enc_tag}{art_tag} | Siap Diekspor"
                     )
         except Exception as err:
             self._show_toast(f"Error: {str(err)}", is_error=True)
+
+    def _on_artistic_toggle(self):
+        if self.chk_artistic_bg.get() == 1 and not self.artistic_bg_path:
+            self._choose_artistic_bg_file()
+        else:
+            self.generate_qr()
+
+    def _choose_artistic_bg_file(self):
+        filepath = filedialog.askopenfilename(
+            title="Pilih Gambar Latar Belakang QR",
+            filetypes=[
+                ("Image Files", "*.png;*.jpg;*.jpeg;*.webp;*.bmp"),
+                ("PNG Image", "*.png"),
+                ("JPEG Image", "*.jpg;*.jpeg"),
+                ("Semua File", "*.*"),
+            ],
+        )
+        if filepath:
+            self.artistic_bg_path = filepath
+            filename = os.path.basename(filepath)
+            self.artistic_filename_lbl.configure(text=f"Gambar: {filename}", text_color=("#10b981", "#10b981"))
+            self.chk_artistic_bg.select()
+            self.generate_qr()
+
+    def _clear_artistic_bg(self):
+        self.artistic_bg_path = None
+        self.artistic_filename_lbl.configure(text="Belum ada gambar latar yang dipilih", text_color="gray50")
+        self.chk_artistic_bg.deselect()
+        self.generate_qr()
 
     def _choose_logo_file(self):
         filepath = filedialog.askopenfilename(

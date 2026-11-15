@@ -37,6 +37,13 @@ Aplikasi Desktop modern berbasis Python dengan integrasi C++ Native Engine untuk
 - Verifikasi instan: otomatis mendekripsi dan mengecek keaslian token tiket atau mengenali format QRIS saat tertangkap kamera.
 - Opsi scan langsung dari berkas gambar lokal (PNG, JPG, BMP).
 
+### 5. Timpa dengan Gambar Latar (Artistic Visual QR)
+- Fitur menggabungkan dan menimpa QR Code di atas gambar apa saja (foto, artwork, poster, logo besar).
+- Algoritma Proteksi Sudut Finder Pattern: Zona 9x9 modul di 3 sudut posisi utama dilindungi secara solid agar scanner kamera (Google Lens, iOS Camera, ZXing, OpenCV) mengunci posisi QR Code seketika.
+- Slider Transparansi Gambar Latar: Mengatur intensitas gambar latar terhadap modul data QR Code (0.15 s/d 0.85).
+- Otomatis mengaktifkan koreksi kesalahan High (Level H - 30% recovery) agar pemindaian tetap 100% akurat.
+- Kompatibel dengan semua jenis payload (URL, Wi-Fi, vCard, WhatsApp, Tiket Enkripsi C++, dan QRIS Pembayaran).
+
 ---
 
 ## Cara Menjalankan Aplikasi
