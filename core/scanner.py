@@ -71,6 +71,27 @@ class ScannerEngine:
                 if res and res.raw_text:
                     return res
 
+            # 5. Ekstraksi pemisahan kanal warna untuk citra berkontras rendah (misal modul merah di atas latar abu-abu)
+            R = bordered[:, :, 2].astype(np.float32)
+            G = bordered[:, :, 1].astype(np.float32)
+            B = bordered[:, :, 0].astype(np.float32)
+
+            diff_r = R - (G + B) / 2.0
+            d_norm = ((diff_r - diff_r.min()) / (diff_r.max() - diff_r.min() + 1e-5) * 255).astype(np.uint8)
+            _, th_r = cv2.threshold(d_norm, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
+            for cand in (th_r, 255 - th_r):
+                res = self.process_image_array(cand, secret_key)
+                if res and res.raw_text:
+                    return res
+
+            # 6. Uji kanal saturasi warna HSV
+            hsv = cv2.cvtColor(bordered, cv2.COLOR_BGR2HSV)
+            sat = hsv[:, :, 1]
+            for cand in (sat, 255 - sat):
+                res = self.process_image_array(cand, secret_key)
+                if res and res.raw_text:
+                    return res
+
             return None
         except Exception as e:
             return ScanResult(message=f"Gagal membaca gambar: {str(e)}")
